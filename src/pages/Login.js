@@ -1,30 +1,132 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { sanitizeFormData } from '../utils/security';
+import { 
+  initializeGoogleAuth, 
+  handleGoogleSignIn, 
+  createUserFromGoogle 
+} from '../utils/googleAuth';
 
 function Login() {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Initialize Google Auth on component mount
+  useEffect(() => {
+    initializeGoogleAuth();
+  }, []);
 
   const handleChange = (e) => {
+    const { name, value } = e.target;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [name]: value
     });
+    
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      newErrors.email = 'Please enter a valid email address';
+    }
+    
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+    
     setIsLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      // Sanitize form data
+      const sanitizedData = sanitizeFormData(formData);
+      
+      // Simulate API call with sanitized data
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(sanitizedData)
+      });
+      
+      if (response.ok) {
+        // Login successful
+        navigate('/cars');
+      } else {
+        const errorData = await response.json();
+        setErrors({ general: errorData.message || 'Login failed' });
+      }
+    } catch (error) {
+      setErrors({ general: 'Network error. Please try again.' });
+    } finally {
       setIsLoading(false);
-      // Handle login logic here
-      console.log('Login attempt:', formData);
-    }, 1000);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    
+    try {
+      const googleData = await handleGoogleSignIn();
+      const googleUser = googleData.user;
+      
+      // Create user data from Google profile
+      const userData = createUserFromGoogle(googleUser);
+      
+      // Simulate Google login API call
+      const response = await fetch('/api/login/google', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          google_id: googleUser.id,
+          email: googleUser.email,
+          user_data: userData
+        })
+      });
+      
+      if (response.ok) {
+        // Google login successful
+        navigate('/cars');
+      } else {
+        const errorData = await response.json();
+        setErrors({ general: errorData.message || 'Google login failed' });
+      }
+      
+    } catch (error) {
+      setErrors({ general: 'Google authentication failed. Please try again.' });
+    } finally {
+      setGoogleLoading(false);
+    }
   };
 
   return (
@@ -34,6 +136,12 @@ function Login() {
           <h1>Log in</h1>
           <p>Welcome back</p>
         </div>
+
+        {errors.general && (
+          <div className="error-message general-error">
+            {errors.general}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
@@ -45,8 +153,12 @@ function Login() {
               value={formData.email}
               onChange={handleChange}
               placeholder="Enter your email"
+              className={errors.email ? 'error' : ''}
               required
             />
+            {errors.email && (
+              <span className="error-text">{errors.email}</span>
+            )}
           </div>
 
           <div className="form-group">
@@ -58,8 +170,12 @@ function Login() {
               value={formData.password}
               onChange={handleChange}
               placeholder="Enter your password"
+              className={errors.password ? 'error' : ''}
               required
             />
+            {errors.password && (
+              <span className="error-text">{errors.password}</span>
+            )}
           </div>
 
           <div className="form-options">
@@ -87,15 +203,20 @@ function Login() {
         </div>
 
         <div className="social-login">
-          <button className="social-btn google-btn">
+          <button 
+            type="button"
+            className={`social-btn google-btn ${googleLoading ? 'loading' : ''}`}
+            onClick={handleGoogleSignIn}
+            disabled={googleLoading}
+          >
             <i className="fab fa-google"></i>
-            Continue with Google
+            {googleLoading ? 'Connecting...' : 'Continue with Google'}
           </button>
-          <button className="social-btn facebook-btn">
+          <button className="social-btn facebook-btn" disabled>
             <i className="fab fa-facebook-f"></i>
             Continue with Facebook
           </button>
-          <button className="social-btn apple-btn">
+          <button className="social-btn apple-btn" disabled>
             <i className="fab fa-apple"></i>
             Continue with Apple
           </button>

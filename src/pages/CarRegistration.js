@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { sanitizeFormData, validateFileUpload, validateUrl } from '../utils/security';
 
 const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
@@ -8,6 +9,7 @@ function CarRegistration() {
   const [currentStep, setCurrentStep] = useState(1);
   const [userChoice, setUserChoice] = useState(null); // 'login', 'guest', or null
   const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState({});
   
   const [carData, setCarData] = useState({
     title: '',
@@ -65,6 +67,14 @@ function CarRegistration() {
   const handleCarDataChange = (e) => {
     const { name, value, type, checked } = e.target;
     
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+    
     if (name.includes('.')) {
       const [parent, child] = name.split('.');
       setCarData(prev => ({
@@ -84,6 +94,15 @@ function CarRegistration() {
 
   const handleUserDataChange = (e) => {
     const { name, value } = e.target;
+    
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+    
     setUserData(prev => ({
       ...prev,
       [name]: value
@@ -104,11 +123,99 @@ function CarRegistration() {
     }));
   };
 
+  const validateForm = () => {
+    const newErrors = {};
+    
+    // Validate car data
+    if (!carData.title.trim()) {
+      newErrors.title = 'Car title is required';
+    }
+    
+    if (!carData.make.trim()) {
+      newErrors.make = 'Car make is required';
+    }
+    
+    if (!carData.model.trim()) {
+      newErrors.model = 'Car model is required';
+    }
+    
+    if (!carData.year) {
+      newErrors.year = 'Car year is required';
+    } else if (carData.year < 1900 || carData.year > new Date().getFullYear() + 1) {
+      newErrors.year = 'Please enter a valid year';
+    }
+    
+    if (!carData.price_per_day) {
+      newErrors.price_per_day = 'Price per day is required';
+    } else if (parseFloat(carData.price_per_day) <= 0) {
+      newErrors.price_per_day = 'Price must be greater than 0';
+    }
+    
+    // Validate location
+    if (!carData.location.address.trim()) {
+      newErrors['location.address'] = 'Address is required';
+    }
+    
+    if (!carData.location.city.trim()) {
+      newErrors['location.city'] = 'City is required';
+    }
+    
+    if (!carData.location.country.trim()) {
+      newErrors['location.country'] = 'Country is required';
+    }
+    
+    // Validate media URLs
+    carData.media.forEach((media, index) => {
+      if (media.media_url && !validateUrl(media.media_url)) {
+        newErrors[`media.${index}.media_url`] = 'Please enter a valid URL';
+      }
+    });
+    
+    // Validate user data if guest mode
+    if (userChoice === 'guest') {
+      if (!userData.first_name.trim()) {
+        newErrors['user.first_name'] = 'First name is required';
+      }
+      
+      if (!userData.last_name.trim()) {
+        newErrors['user.last_name'] = 'Last name is required';
+      }
+      
+      if (!userData.phone_number.trim()) {
+        newErrors['user.phone_number'] = 'Phone number is required';
+      }
+      
+      if (!userData.address.trim()) {
+        newErrors['user.address'] = 'Address is required';
+      }
+      
+      if (!userData.city.trim()) {
+        newErrors['user.city'] = 'City is required';
+      }
+      
+      if (!userData.country.trim()) {
+        newErrors['user.country'] = 'Country is required';
+      }
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+    
     setIsLoading(true);
     
     try {
+      // Sanitize data before sending
+      const sanitizedCarData = sanitizeFormData(carData);
+      const sanitizedUserData = sanitizeFormData(userData);
+      
       // If user chose guest mode, create user first
       if (userChoice === 'guest') {
         const userResponse = await fetch(`${baseUrl}/api/v1/users`, {
@@ -116,11 +223,12 @@ function CarRegistration() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(userData)
+          body: JSON.stringify(sanitizedUserData)
         });
 
         if (!userResponse.ok) {
-          throw new Error('Failed to create user');
+          const errorData = await userResponse.json();
+          throw new Error(errorData.message || 'Failed to create user');
         }
 
         const userResult = await userResponse.json();
@@ -133,11 +241,12 @@ function CarRegistration() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(carData)
+        body: JSON.stringify(sanitizedCarData)
       });
 
       if (!vehicleResponse.ok) {
-        throw new Error('Failed to create vehicle');
+        const errorData = await vehicleResponse.json();
+        throw new Error(errorData.message || 'Failed to create vehicle');
       }
 
       const vehicleResult = await vehicleResponse.json();
@@ -151,7 +260,7 @@ function CarRegistration() {
       }
     } catch (error) {
       console.error('Error creating vehicle:', error);
-      alert('Error creating vehicle. Please try again.');
+      setErrors({ general: error.message || 'Error creating vehicle. Please try again.' });
     } finally {
       setIsLoading(false);
     }

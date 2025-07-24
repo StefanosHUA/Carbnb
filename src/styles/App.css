@@ -5,6 +5,205 @@
   box-sizing: border-box;
 }
 
+/* Error and Validation Styles */
+.error-message {
+  background: #fee;
+  border: 1px solid #fcc;
+  color: #c33;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.general-error {
+  background: #fff3cd;
+  border-color: #ffeaa7;
+  color: #856404;
+}
+
+.error-text {
+  color: #dc3545;
+  font-size: 12px;
+  margin-top: 4px;
+  display: block;
+}
+
+input.error,
+textarea.error {
+  border-color: #dc3545 !important;
+  box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.25) !important;
+}
+
+/* Secure File Upload Styles */
+.secure-file-upload {
+  margin: 16px 0;
+}
+
+.upload-area {
+  border: 2px dashed #ddd;
+  border-radius: 8px;
+  padding: 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: #fafafa;
+}
+
+.upload-area:hover {
+  border-color: #ff385c;
+  background: #fff5f5;
+}
+
+.upload-area.drag-active {
+  border-color: #ff385c;
+  background: #fff5f5;
+  transform: scale(1.02);
+}
+
+.upload-area.validating {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.upload-content {
+  color: #666;
+}
+
+.upload-content i {
+  font-size: 48px;
+  color: #ff385c;
+  margin-bottom: 16px;
+}
+
+.upload-content p {
+  margin: 8px 0;
+  font-size: 16px;
+}
+
+.upload-hint {
+  font-size: 12px !important;
+  color: #999 !important;
+  margin-top: 8px !important;
+}
+
+.upload-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #ff385c;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.upload-error {
+  background: #fee;
+  border: 1px solid #fcc;
+  color: #c33;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 8px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.upload-error i {
+  font-size: 14px;
+}
+
+/* Loading states for social buttons */
+.social-btn.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.social-btn.loading i {
+  animation: spin 1s linear infinite;
+}
+
+/* Header User Menu Styles */
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #ff385c;
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #222222;
+}
+
+.logout-btn {
+  background: #ff385c;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.logout-btn:hover {
+  background: #e31c5f;
+}
+
+.google-signin-btn {
+  background: #4285f4;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.google-signin-btn:hover:not(:disabled) {
+  background: #3367d6;
+}
+
+.google-signin-btn.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.google-signin-btn i {
+  font-size: 16px;
+}
+
 body, #root {
   height: 100vh;
   margin: 0;
