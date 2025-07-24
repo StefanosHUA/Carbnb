@@ -37,7 +37,13 @@ export const getGoogleConfig = () => ({
 export const handleGoogleSignIn = () => {
   return new Promise((resolve, reject) => {
     if (!window.google) {
-      reject(new Error('Google API not loaded'));
+      reject(new Error('Google API not loaded. Please refresh the page and try again.'));
+      return;
+    }
+
+    // Check if Google Client ID is configured
+    if (GOOGLE_CLIENT_ID === 'your-google-client-id' || !GOOGLE_CLIENT_ID) {
+      reject(new Error('Google OAuth is not configured yet. Please contact the development team.'));
       return;
     }
 
@@ -46,7 +52,16 @@ export const handleGoogleSignIn = () => {
       scope: 'email profile',
       callback: async (response) => {
         if (response.error) {
-          reject(new Error(response.error));
+          // Handle specific OAuth errors
+          if (response.error === 'popup_closed_by_user') {
+            reject(new Error('Sign-in was cancelled. You can try again.'));
+          } else if (response.error === 'access_denied') {
+            reject(new Error('Access was denied. Please try again or contact support.'));
+          } else if (response.error === 'invalid_client') {
+            reject(new Error('Google OAuth is not configured yet. Please contact the development team.'));
+          } else {
+            reject(new Error(`Google sign-in failed: ${response.error}. Please try again.`));
+          }
           return;
         }
 
@@ -58,7 +73,7 @@ export const handleGoogleSignIn = () => {
             user: userInfo
           });
         } catch (error) {
-          reject(error);
+          reject(new Error('Failed to get user information. Please try again.'));
         }
       }
     });

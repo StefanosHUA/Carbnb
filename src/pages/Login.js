@@ -122,7 +122,14 @@ function Login() {
       navigate('/cars');
       
     } catch (error) {
-      setErrors({ general: 'Google authentication failed. Please try again.' });
+      // Show user-friendly error message
+      const errorMessage = error.message || 'Google authentication failed. Please try again.';
+      setErrors({ general: errorMessage });
+      
+      // Clear the error after 5 seconds to allow retry
+      setTimeout(() => {
+        setErrors({});
+      }, 5000);
     } finally {
       setGoogleLoading(false);
     }
