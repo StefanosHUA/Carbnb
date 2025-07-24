@@ -30,7 +30,17 @@ function Register() {
 
   // Initialize Google Auth on component mount
   useEffect(() => {
+    console.log('Initializing Google Auth...');
     initializeGoogleAuth();
+    
+    // Check if Google API loaded after a delay
+    setTimeout(() => {
+      if (window.google && window.google.accounts) {
+        console.log('Google API loaded successfully');
+      } else {
+        console.log('Google API not loaded yet');
+      }
+    }, 2000);
   }, []);
 
   const handleChange = (e) => {
@@ -143,10 +153,14 @@ function Register() {
   };
 
   const handleGoogleSignInClick = async () => {
+    console.log('Google sign-in button clicked');
+    alert('Button clicked! Testing if click works...');
     setGoogleLoading(true);
     
     try {
+      console.log('Calling handleGoogleSignIn...');
       const googleData = await handleGoogleSignIn();
+      console.log('Google data received:', googleData);
       const googleUser = googleData.user;
       
       // Validate Google user data
@@ -167,6 +181,7 @@ function Register() {
       navigate('/cars');
       
     } catch (error) {
+      console.error('Google sign-in error:', error);
       // Show user-friendly error message
       const errorMessage = error.message || 'Google authentication failed. Please try again.';
       setErrors({ general: errorMessage });
