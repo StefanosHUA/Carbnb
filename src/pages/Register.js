@@ -142,7 +142,7 @@ function Register() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignInClick = async () => {
     setGoogleLoading(true);
     
     try {
@@ -159,14 +159,12 @@ function Register() {
       // Create user data from Google profile
       const userData = createUserFromGoogle(googleUser);
       
-      // Pre-fill form with Google data
-      setFormData(prev => ({
-        ...prev,
-        ...userData
-      }));
+      // Save user data to localStorage (simulating successful registration)
+      localStorage.setItem('carbnb_user', JSON.stringify(userData));
       
-      // Show success message
-      alert('Google authentication successful! Please complete your profile and submit.');
+      // Show success message and redirect
+      alert('Google authentication successful! Welcome to Carbnb!');
+      navigate('/cars');
       
     } catch (error) {
       setErrors({ general: 'Google authentication failed. Please try again.' });
@@ -416,7 +414,7 @@ function Register() {
           <button 
             type="button"
             className={`social-btn google-btn ${googleLoading ? 'loading' : ''}`}
-            onClick={handleGoogleSignIn}
+            onClick={handleGoogleSignInClick}
             disabled={googleLoading}
           >
             <i className="fab fa-google"></i>

@@ -1,47 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { initializeGoogleAuth, handleGoogleSignIn, createUserFromGoogle } from '../utils/googleAuth';
 
 function Header() {
   const navigate = useNavigate();
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [user, setUser] = useState(null);
 
-  // Initialize Google Auth on component mount
+  // Check if user is logged in
   useEffect(() => {
-    initializeGoogleAuth();
-    
-    // Check if user is logged in (you can implement your own auth logic here)
     const savedUser = localStorage.getItem('carbnb_user');
     if (savedUser) {
       setUser(JSON.parse(savedUser));
     }
   }, []);
-
-  const handleGoogleSignIn = async () => {
-    setIsGoogleLoading(true);
-    
-    try {
-      const googleData = await handleGoogleSignIn();
-      const googleUser = googleData.user;
-      
-      // Create user data from Google profile
-      const userData = createUserFromGoogle(googleUser);
-      
-      // Save user data to localStorage (in a real app, you'd save to your backend)
-      localStorage.setItem('carbnb_user', JSON.stringify(userData));
-      setUser(userData);
-      
-      // Navigate to cars page or dashboard
-      navigate('/cars');
-      
-    } catch (error) {
-      console.error('Google authentication failed:', error);
-      alert('Google authentication failed. Please try again.');
-    } finally {
-      setIsGoogleLoading(false);
-    }
-  };
 
   const handleLogout = () => {
     localStorage.removeItem('carbnb_user');
@@ -92,14 +62,6 @@ function Header() {
             </div>
           ) : (
             <>
-              <button 
-                onClick={handleGoogleSignIn}
-                className={`google-signin-btn ${isGoogleLoading ? 'loading' : ''}`}
-                disabled={isGoogleLoading}
-              >
-                <i className="fab fa-google"></i>
-                {isGoogleLoading ? 'Signing in...' : 'Sign in with Google'}
-              </button>
               <Link to="/login" className="login-btn">
                 Log in
               </Link>
