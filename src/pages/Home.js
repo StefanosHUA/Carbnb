@@ -102,14 +102,14 @@ const mockCars = [
 ];
 
 const popularBrands = [
-  { name: 'BMW', logo: '🚗' },
-  { name: 'Mercedes', logo: '🚗' },
-  { name: 'Audi', logo: '🚗' },
-  { name: 'Tesla', logo: '⚡' },
-  { name: 'Toyota', logo: '🚗' },
-  { name: 'Honda', logo: '🚗' },
-  { name: 'Ford', logo: '🚗' },
-  { name: 'Volkswagen', logo: '🚗' }
+  { name: 'BMW', logo: '🚗', logoUrl: null },
+  { name: 'Mercedes', logo: '🚗', logoUrl: null },
+  { name: 'Audi', logo: '🚗', logoUrl: null },
+  { name: 'Tesla', logo: '⚡', logoUrl: null },
+  { name: 'Toyota', logo: '🚗', logoUrl: null },
+  { name: 'Honda', logo: '🚗', logoUrl: null },
+  { name: 'Ford', logo: '🚗', logoUrl: null },
+  { name: 'Volkswagen', logo: '🚗', logoUrl: null }
 ];
 
 const popularModels = [
@@ -244,7 +244,22 @@ function Home() {
         <div className="brands-grid">
           {popularBrands.map(brand => (
             <div key={brand.name} className="brand-card">
-              <div className="brand-logo">{brand.logo}</div>
+              <div className="brand-logo">
+                {brand.logoUrl ? (
+                  <img 
+                    src={brand.logoUrl} 
+                    alt={brand.name} 
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      const fallback = e.target.parentElement.querySelector('.brand-logo-fallback');
+                      if (fallback) fallback.style.display = 'block';
+                    }} 
+                  />
+                ) : null}
+                <span className="brand-logo-fallback" style={{ display: brand.logoUrl ? 'none' : 'block' }}>
+                  {brand.logo}
+                </span>
+              </div>
               <h3>{brand.name}</h3>
             </div>
           ))}

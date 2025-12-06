@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { sanitizeFormData } from '../utils/security';
+import { useToastContext } from '../context/ToastContext';
 import { 
   initializeGoogleAuth, 
   handleGoogleSignIn, 
@@ -9,6 +10,7 @@ import {
 
 function Login() {
   const navigate = useNavigate();
+  const toast = useToastContext();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -79,16 +81,27 @@ function Login() {
       
       if (response.ok) {
         // Login successful
-        navigate('/cars');
+        toast.success('Login successful! Welcome back.');
+        setTimeout(() => {
+          navigate('/cars');
+        }, 1000);
       } else {
         const errorData = await response.json();
-        setErrors({ general: errorData.message || 'Login failed' });
+        const errorMessage = errorData.message || 'Login failed';
+        setErrors({ general: errorMessage });
+        toast.error(errorMessage);
       }
     } catch (error) {
-      setErrors({ general: 'Network error. Please try again.' });
+      const errorMessage = 'Network error. Please try again.';
+      setErrors({ general: errorMessage });
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleClose = () => {
+    navigate('/');
   };
 
   const handleGoogleSignInClick = async () => {
@@ -118,13 +131,18 @@ function Login() {
       // In a real app, you'd check the response from your backend
       localStorage.setItem('carbnb_user', JSON.stringify(userData));
       
+      toast.success('Google login successful! Welcome to Carbnb.');
+      
       // Google login successful
-      navigate('/cars');
+      setTimeout(() => {
+        navigate('/cars');
+      }, 1000);
       
     } catch (error) {
       // Show user-friendly error message
       const errorMessage = error.message || 'Google authentication failed. Please try again.';
       setErrors({ general: errorMessage });
+      toast.error(errorMessage);
       
       // Clear the error after 5 seconds to allow retry
       setTimeout(() => {
@@ -136,8 +154,16 @@ function Login() {
   };
 
   return (
-    <div className="login-page">
-      <div className="login-container">
+    <div className="login-page" onClick={(e) => {
+      // Close if clicking directly on the page background (not on the container)
+      if (e.target === e.currentTarget) {
+        handleClose();
+      }
+    }}>
+      <div className="login-container" onClick={(e) => e.stopPropagation()}>
+        <button className="close-btn" onClick={handleClose} aria-label="Close" title="Close">
+          <i className="fas fa-times"></i>
+        </button>
         <div className="login-header">
           <h1>Log in</h1>
           <p>Welcome back</p>

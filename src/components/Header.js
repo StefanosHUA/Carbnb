@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 
 function Header() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState(null);
+  
+  // Hide search bar on login and register pages
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/register' || location.pathname === '/register-car';
+  const isHomePage = location.pathname === '/';
 
   // Check if user is logged in
   useEffect(() => {
@@ -20,7 +25,7 @@ function Header() {
   };
 
   return (
-    <header className="header">
+    <header className={`header ${isHomePage ? 'header-home' : 'header-other'}`}>
       <div className="header-container">
         <div className="header-left">
           <Link to="/" className="logo">
@@ -28,18 +33,20 @@ function Header() {
           </Link>
         </div>
         
-        <div className="header-center">
-          <div className="search-bar">
-            <input 
-              type="text" 
-              placeholder="Where do you want to go?" 
-              className="search-input"
-            />
-            <button className="search-button">
-              <i className="fas fa-search"></i>
-            </button>
+        {!isAuthPage && (
+          <div className="header-center">
+            <div className="search-bar">
+              <input 
+                type="text" 
+                placeholder="Which car would you like to rent?" 
+                className="search-input"
+              />
+              <button className="search-button">
+                <i className="fas fa-search"></i>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
         
         <div className="header-right">
           <Link to="/register-car" className="register-car-btn">

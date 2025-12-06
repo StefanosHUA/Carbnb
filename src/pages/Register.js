@@ -152,6 +152,10 @@ function Register() {
     }
   };
 
+  const handleClose = () => {
+    navigate('/');
+  };
+
   const handleGoogleSignInClick = async () => {
     console.log('Google sign-in button clicked');
     alert('Button clicked! Testing if click works...');
@@ -196,8 +200,16 @@ function Register() {
   };
 
   return (
-    <div className="register-page">
-      <div className="register-container">
+    <div className="register-page" onClick={(e) => {
+      // Close if clicking directly on the page background (not on the container)
+      if (e.target === e.currentTarget) {
+        handleClose();
+      }
+    }}>
+      <div className="register-container" onClick={(e) => e.stopPropagation()}>
+        <button className="close-btn" onClick={handleClose} aria-label="Close" title="Close">
+          <i className="fas fa-times"></i>
+        </button>
         <div className="register-header">
           <h1>Sign up</h1>
           <p>Join Carbnb and start your journey</p>

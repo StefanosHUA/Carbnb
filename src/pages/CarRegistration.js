@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { sanitizeFormData, validateFileUpload, validateUrl } from '../utils/security';
+import { useToastContext } from '../context/ToastContext';
 
 const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
 function CarRegistration() {
   const navigate = useNavigate();
+  const toast = useToastContext();
   const [currentStep, setCurrentStep] = useState(1);
   const [userChoice, setUserChoice] = useState(null); // 'login', 'guest', or null
   const [isLoading, setIsLoading] = useState(false);
@@ -202,6 +204,10 @@ function CarRegistration() {
     return Object.keys(newErrors).length === 0;
   };
 
+  const handleClose = () => {
+    navigate('/');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -252,15 +258,23 @@ function CarRegistration() {
       const vehicleResult = await vehicleResponse.json();
       console.log('Vehicle created:', vehicleResult);
       
+      toast.success('Car registered successfully!');
+      
       // If user chose guest mode, redirect to login
       if (userChoice === 'guest') {
-        navigate('/login');
+        setTimeout(() => {
+          navigate('/login');
+        }, 1500);
       } else {
-        navigate('/cars');
+        setTimeout(() => {
+          navigate('/cars');
+        }, 1500);
       }
     } catch (error) {
       console.error('Error creating vehicle:', error);
-      setErrors({ general: error.message || 'Error creating vehicle. Please try again.' });
+      const errorMessage = error.message || 'Error creating vehicle. Please try again.';
+      setErrors({ general: errorMessage });
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -293,7 +307,14 @@ function CarRegistration() {
       
       <button 
         className="next-btn"
-        onClick={() => setCurrentStep(2)}
+        onClick={() => {
+          if (userChoice === 'login') {
+            toast.info('Please log in to continue');
+            navigate('/login');
+          } else {
+            setCurrentStep(2);
+          }
+        }}
         disabled={!userChoice}
       >
         Continue
@@ -874,8 +895,16 @@ function CarRegistration() {
   );
 
   return (
-    <div className="car-registration-page">
-      <div className="registration-container">
+    <div className="car-registration-page" onClick={(e) => {
+      // Close if clicking directly on the page background (not on the container)
+      if (e.target === e.currentTarget) {
+        handleClose();
+      }
+    }}>
+      <div className="registration-container" onClick={(e) => e.stopPropagation()}>
+        <button className="close-btn" onClick={handleClose} aria-label="Close" title="Close">
+          <i className="fas fa-times"></i>
+        </button>
         {currentStep === 1 ? renderStep1() : renderStep2()}
       </div>
     </div>
