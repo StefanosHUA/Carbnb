@@ -2,7 +2,10 @@
 
 // Google OAuth configuration
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || 'your-google-client-id';
-const GOOGLE_REDIRECT_URI = process.env.REACT_APP_GOOGLE_REDIRECT_URI || window.location.origin;
+// Use environment variable if set, otherwise use current origin
+// For production, make sure REACT_APP_GOOGLE_REDIRECT_URI is set in Netlify environment variables
+const GOOGLE_REDIRECT_URI = process.env.REACT_APP_GOOGLE_REDIRECT_URI || 
+  (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
 
 /**
  * Initialize Google OAuth
