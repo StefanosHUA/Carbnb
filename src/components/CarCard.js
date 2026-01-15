@@ -1,16 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { Link } from 'react-router-dom';
 import ImageGallery from './ImageGallery';
+import { getPrimaryCarImage, getAllCarImages } from '../utils/carImages';
 
-function CarCard({ car }) {
+const CarCard = memo(function CarCard({ car }) {
   const [showGallery, setShowGallery] = useState(false);
   
-  // Create array of images - use car.image as primary, add more if available
-  const carImages = car.images && car.images.length > 0 
-    ? car.images 
-    : car.image 
-      ? [car.image] 
-      : [];
+  // Get all car images (prioritizes uploaded media)
+  const carImages = getAllCarImages(car);
+  const primaryImage = getPrimaryCarImage(car);
 
   const handleImageClick = (e) => {
     e.preventDefault();
@@ -24,7 +22,7 @@ function CarCard({ car }) {
       <Link to={`/car/${car.id}`} className="car-card">
         <div className="car-image-container">
           <img 
-            src={car.image} 
+            src={primaryImage} 
             alt={car.name} 
             className="car-image"
             onClick={handleImageClick}
@@ -55,7 +53,26 @@ function CarCard({ car }) {
             <span className="review-count">({car.reviews})</span>
           </div>
         </div>
-        <p className="car-location">{car.location}</p>
+        <p className="car-location">
+          {(() => {
+            if (!car.location) return 'Location not available';
+            if (typeof car.location === 'string') return car.location;
+            // Handle location object
+            const loc = car.location;
+            if (loc.city && loc.state) {
+              return `${loc.city}, ${loc.state}`;
+            } else if (loc.city) {
+              return loc.city;
+            } else if (loc.state) {
+              return loc.state;
+            } else if (loc.name) {
+              return loc.name;
+            } else if (loc.address) {
+              return loc.address;
+            }
+            return 'Location not available';
+          })()}
+        </p>
         <p className="car-desc">{car.description}</p>
         <div className="car-price-container">
           <span className="car-price">${car.price}</span>
@@ -72,6 +89,6 @@ function CarCard({ car }) {
     )}
     </>
   );
-}
+});
 
 export default CarCard; 

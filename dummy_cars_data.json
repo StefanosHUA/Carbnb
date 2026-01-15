@@ -1,0 +1,512 @@
+[
+  {
+    "title": "Tesla Model 3 - Premium Electric Sedan",
+    "description": "Experience the future of driving with this 2022 Tesla Model 3. Features Full Self-Driving capability, 300+ mile range, and premium interior. Perfect for eco-conscious travelers who want luxury and performance.",
+    "make": "Tesla",
+    "model": "Model 3",
+    "year": 2022,
+    "vehicle_type": "Sedan",
+    "license_plate": "TESLA-2022",
+    "use": "Personal",
+    "color": "Pearl White",
+    "seats": 5,
+    "doors": 4,
+    "transmission": "Automatic",
+    "fuel_type": "Electric",
+    "mileage": 15000,
+    "price_per_day": 120,
+    "dynamic_price_enabled": true,
+    "owner_id": 1,
+    "location": {
+      "address": "123 Market Street",
+      "city": "San Francisco",
+      "state": "California",
+      "country": "United States",
+      "postal_code": "94102",
+      "latitude": 37.7749,
+      "longitude": -122.4194
+    },
+    "media": [
+      {
+        "media_url": "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1461632830798-3adb3034e4c8?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      }
+    ],
+    "availabilities": [
+      {
+        "start_date": "2024-01-15",
+        "end_date": "2024-12-31",
+        "is_available": true
+      }
+    ],
+    "rating": 4.8,
+    "reviews": 127
+  },
+  {
+    "title": "BMW 3 Series - Luxury Sport Sedan",
+    "description": "2021 BMW 3 Series with Sport Package. Features 250hp turbocharged engine, premium leather interior, and advanced safety features. Perfect for business travelers and luxury enthusiasts.",
+    "make": "BMW",
+    "model": "3 Series",
+    "year": 2021,
+    "vehicle_type": "Sedan",
+    "license_plate": "BMW-2021",
+    "use": "Personal",
+    "color": "Mineral Gray",
+    "seats": 5,
+    "doors": 4,
+    "transmission": "Automatic",
+    "fuel_type": "Gasoline",
+    "mileage": 22000,
+    "price_per_day": 90,
+    "dynamic_price_enabled": false,
+    "owner_id": 2,
+    "location": {
+      "address": "456 Sunset Boulevard",
+      "city": "Los Angeles",
+      "state": "California",
+      "country": "United States",
+      "postal_code": "90028",
+      "latitude": 34.0522,
+      "longitude": -118.2437
+    },
+    "media": [
+      {
+        "media_url": "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1461632830798-3adb3034e4c8?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      }
+    ],
+    "availabilities": [
+      {
+        "start_date": "2024-01-01",
+        "end_date": "2024-12-31",
+        "is_available": true
+      }
+    ],
+    "rating": 4.6,
+    "reviews": 89
+  },
+  {
+    "title": "Toyota Prius - Eco-Friendly Hybrid",
+    "description": "2020 Toyota Prius with excellent fuel economy. Perfect for city driving and long trips. Features spacious interior, advanced safety systems, and hybrid technology. Great value for money.",
+    "make": "Toyota",
+    "model": "Prius",
+    "year": 2020,
+    "vehicle_type": "Hatchback",
+    "license_plate": "TOY-2020",
+    "use": "Personal",
+    "color": "Blue",
+    "seats": 5,
+    "doors": 5,
+    "transmission": "CVT",
+    "fuel_type": "Hybrid",
+    "mileage": 35000,
+    "price_per_day": 60,
+    "dynamic_price_enabled": false,
+    "owner_id": 3,
+    "location": {
+      "address": "789 Pike Street",
+      "city": "Seattle",
+      "state": "Washington",
+      "country": "United States",
+      "postal_code": "98101",
+      "latitude": 47.6062,
+      "longitude": -122.3321
+    },
+    "media": [
+      {
+        "media_url": "https://images.unsplash.com/photo-1461632830798-3adb3034e4c8?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      }
+    ],
+    "availabilities": [
+      {
+        "start_date": "2024-01-10",
+        "end_date": "2024-12-31",
+        "is_available": true
+      }
+    ],
+    "rating": 4.7,
+    "reviews": 156
+  },
+  {
+    "title": "Ford Mustang - Classic Convertible",
+    "description": "2019 Ford Mustang Convertible with V8 engine. Experience the thrill of open-top driving with this iconic American muscle car. Perfect for weekend getaways and scenic drives.",
+    "make": "Ford",
+    "model": "Mustang",
+    "year": 2019,
+    "vehicle_type": "Convertible",
+    "license_plate": "FORD-2019",
+    "use": "Personal",
+    "color": "Race Red",
+    "seats": 4,
+    "doors": 2,
+    "transmission": "Manual",
+    "fuel_type": "Gasoline",
+    "mileage": 28000,
+    "price_per_day": 110,
+    "dynamic_price_enabled": true,
+    "owner_id": 4,
+    "location": {
+      "address": "321 Ocean Drive",
+      "city": "Miami",
+      "state": "Florida",
+      "country": "United States",
+      "postal_code": "33139",
+      "latitude": 25.7617,
+      "longitude": -80.1918
+    },
+    "media": [
+      {
+        "media_url": "https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1461632830798-3adb3034e4c8?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      }
+    ],
+    "availabilities": [
+      {
+        "start_date": "2024-02-01",
+        "end_date": "2024-12-31",
+        "is_available": true
+      }
+    ],
+    "rating": 4.5,
+    "reviews": 203
+  },
+  {
+    "title": "Audi A4 - Premium Quattro AWD",
+    "description": "2021 Audi A4 with Quattro all-wheel drive. Features premium leather interior, advanced infotainment system, and exceptional handling. Perfect for all weather conditions and long journeys.",
+    "make": "Audi",
+    "model": "A4",
+    "year": 2021,
+    "vehicle_type": "Sedan",
+    "license_plate": "AUDI-2021",
+    "use": "Personal",
+    "color": "Brilliant Black",
+    "seats": 5,
+    "doors": 4,
+    "transmission": "Automatic",
+    "fuel_type": "Gasoline",
+    "mileage": 18000,
+    "price_per_day": 95,
+    "dynamic_price_enabled": false,
+    "owner_id": 5,
+    "location": {
+      "address": "555 Broadway",
+      "city": "New York",
+      "state": "New York",
+      "country": "United States",
+      "postal_code": "10012",
+      "latitude": 40.7128,
+      "longitude": -74.0060
+    },
+    "media": [
+      {
+        "media_url": "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1461632830798-3adb3034e4c8?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      }
+    ],
+    "availabilities": [
+      {
+        "start_date": "2024-01-20",
+        "end_date": "2024-12-31",
+        "is_available": true
+      }
+    ],
+    "rating": 4.9,
+    "reviews": 78
+  },
+  {
+    "title": "Honda Civic - Reliable Compact Car",
+    "description": "2020 Honda Civic with excellent fuel economy and reliability. Perfect for city driving and daily commutes. Features modern technology and spacious interior for its class.",
+    "make": "Honda",
+    "model": "Civic",
+    "year": 2020,
+    "vehicle_type": "Sedan",
+    "license_plate": "HON-2020",
+    "use": "Personal",
+    "color": "Platinum White Pearl",
+    "seats": 5,
+    "doors": 4,
+    "transmission": "Automatic",
+    "fuel_type": "Gasoline",
+    "mileage": 42000,
+    "price_per_day": 45,
+    "dynamic_price_enabled": false,
+    "owner_id": 6,
+    "location": {
+      "address": "888 Michigan Avenue",
+      "city": "Chicago",
+      "state": "Illinois",
+      "country": "United States",
+      "postal_code": "60611",
+      "latitude": 41.8781,
+      "longitude": -87.6298
+    },
+    "media": [
+      {
+        "media_url": "https://images.unsplash.com/photo-1461632830798-3adb3034e4c8?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      }
+    ],
+    "availabilities": [
+      {
+        "start_date": "2024-01-05",
+        "end_date": "2024-12-31",
+        "is_available": true
+      }
+    ],
+    "rating": 4.4,
+    "reviews": 234
+  },
+  {
+    "title": "Mercedes-Benz C-Class - Luxury Sedan",
+    "description": "2022 Mercedes-Benz C-Class with AMG Line package. Features premium interior, advanced driver assistance, and powerful engine. Perfect for business and luxury travel.",
+    "make": "Mercedes-Benz",
+    "model": "C-Class",
+    "year": 2022,
+    "vehicle_type": "Sedan",
+    "license_plate": "MB-2022",
+    "use": "Personal",
+    "color": "Obsidian Black",
+    "seats": 5,
+    "doors": 4,
+    "transmission": "Automatic",
+    "fuel_type": "Gasoline",
+    "mileage": 12000,
+    "price_per_day": 105,
+    "dynamic_price_enabled": true,
+    "owner_id": 1,
+    "location": {
+      "address": "999 Rodeo Drive",
+      "city": "Beverly Hills",
+      "state": "California",
+      "country": "United States",
+      "postal_code": "90210",
+      "latitude": 34.0736,
+      "longitude": -118.4004
+    },
+    "media": [
+      {
+        "media_url": "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1461632830798-3adb3034e4c8?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      }
+    ],
+    "availabilities": [
+      {
+        "start_date": "2024-01-15",
+        "end_date": "2024-12-31",
+        "is_available": true
+      }
+    ],
+    "rating": 4.8,
+    "reviews": 92
+  },
+  {
+    "title": "Jeep Wrangler - Off-Road Adventure",
+    "description": "2021 Jeep Wrangler Unlimited with 4x4 capability. Perfect for outdoor adventures, camping trips, and off-road exploration. Features removable doors and roof for open-air experience.",
+    "make": "Jeep",
+    "model": "Wrangler",
+    "year": 2021,
+    "vehicle_type": "SUV",
+    "license_plate": "JEEP-2021",
+    "use": "Personal",
+    "color": "Firecracker Red",
+    "seats": 5,
+    "doors": 4,
+    "transmission": "Automatic",
+    "fuel_type": "Gasoline",
+    "mileage": 25000,
+    "price_per_day": 85,
+    "dynamic_price_enabled": false,
+    "owner_id": 2,
+    "location": {
+      "address": "777 Desert Road",
+      "city": "Phoenix",
+      "state": "Arizona",
+      "country": "United States",
+      "postal_code": "85001",
+      "latitude": 33.4484,
+      "longitude": -112.0740
+    },
+    "media": [
+      {
+        "media_url": "https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1461632830798-3adb3034e4c8?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      }
+    ],
+    "availabilities": [
+      {
+        "start_date": "2024-01-01",
+        "end_date": "2024-12-31",
+        "is_available": true
+      }
+    ],
+    "rating": 4.6,
+    "reviews": 145
+  },
+  {
+    "title": "Nissan Leaf - Affordable Electric",
+    "description": "2021 Nissan Leaf with 150-mile range. Perfect for city driving and short trips. Features ProPILOT Assist, spacious interior, and zero emissions. Great for eco-conscious renters.",
+    "make": "Nissan",
+    "model": "Leaf",
+    "year": 2021,
+    "vehicle_type": "Hatchback",
+    "license_plate": "NIS-2021",
+    "use": "Personal",
+    "color": "Pearl White",
+    "seats": 5,
+    "doors": 5,
+    "transmission": "Automatic",
+    "fuel_type": "Electric",
+    "mileage": 18000,
+    "price_per_day": 55,
+    "dynamic_price_enabled": false,
+    "owner_id": 3,
+    "location": {
+      "address": "444 Green Street",
+      "city": "Portland",
+      "state": "Oregon",
+      "country": "United States",
+      "postal_code": "97201",
+      "latitude": 45.5152,
+      "longitude": -122.6784
+    },
+    "media": [
+      {
+        "media_url": "https://images.unsplash.com/photo-1461632830798-3adb3034e4c8?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      }
+    ],
+    "availabilities": [
+      {
+        "start_date": "2024-01-10",
+        "end_date": "2024-12-31",
+        "is_available": true
+      }
+    ],
+    "rating": 4.5,
+    "reviews": 112
+  },
+  {
+    "title": "Chevrolet Corvette - Sports Car",
+    "description": "2020 Chevrolet Corvette Stingray with 495hp V8 engine. Experience ultimate performance and handling. Perfect for sports car enthusiasts and special occasions.",
+    "make": "Chevrolet",
+    "model": "Corvette",
+    "year": 2020,
+    "vehicle_type": "Sports Car",
+    "license_plate": "CHEV-2020",
+    "use": "Personal",
+    "color": "Arctic White",
+    "seats": 2,
+    "doors": 2,
+    "transmission": "Automatic",
+    "fuel_type": "Gasoline",
+    "mileage": 15000,
+    "price_per_day": 150,
+    "dynamic_price_enabled": true,
+    "owner_id": 4,
+    "location": {
+      "address": "222 Speedway Boulevard",
+      "city": "Las Vegas",
+      "state": "Nevada",
+      "country": "United States",
+      "postal_code": "89101",
+      "latitude": 36.1699,
+      "longitude": -115.1398
+    },
+    "media": [
+      {
+        "media_url": "https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      },
+      {
+        "media_url": "https://images.unsplash.com/photo-1461632830798-3adb3034e4c8?auto=format&fit=crop&w=800&q=80",
+        "media_type": "image"
+      }
+    ],
+    "availabilities": [
+      {
+        "start_date": "2024-02-01",
+        "end_date": "2024-12-31",
+        "is_available": true
+      }
+    ],
+    "rating": 4.9,
+    "reviews": 67
+  }
+]

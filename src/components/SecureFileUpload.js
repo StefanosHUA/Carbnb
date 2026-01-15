@@ -37,7 +37,7 @@ const SecureFileUpload = ({
 
         // Check if file type is accepted
         if (acceptedTypes.length > 0) {
-          const isAccepted = acceptedTypes.some(type => {
+          let isAccepted = acceptedTypes.some(type => {
             if (type.endsWith('/*')) {
               const baseType = type.replace('/*', '');
               return file.type.startsWith(baseType);
@@ -45,8 +45,34 @@ const SecureFileUpload = ({
             return file.type === type;
           });
 
+          // If MIME type check failed, try checking file extension as fallback
+          if (!isAccepted && (!file.type || file.type === 'application/octet-stream')) {
+            const fileName = file.name.toLowerCase();
+            const extensionToMimeType = {
+              '.pdf': 'application/pdf',
+              '.jpg': 'image/jpeg',
+              '.jpeg': 'image/jpeg',
+              '.png': 'image/png',
+            };
+            
+            // Find matching extension
+            for (const [ext, mimeType] of Object.entries(extensionToMimeType)) {
+              if (fileName.endsWith(ext)) {
+                // Check if this MIME type is in accepted types
+                isAccepted = acceptedTypes.some(type => {
+                  if (type.endsWith('/*')) {
+                    const baseType = type.replace('/*', '');
+                    return mimeType.startsWith(baseType);
+                  }
+                  return mimeType === type;
+                });
+                break;
+              }
+            }
+          }
+
           if (!isAccepted) {
-            setError(`File type ${file.type} is not accepted.`);
+            setError(`File type ${file.type || 'unknown'} is not accepted. Accepted types: ${acceptedTypes.join(', ')}`);
             return;
           }
         }

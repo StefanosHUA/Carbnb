@@ -1,116 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import CarCard from '../components/CarCard';
-
-// Mock data - in real app this would come from API
-const mockCars = [
-  {
-    id: 1,
-    name: 'Tesla Model 3',
-    price: 120,
-    description: 'Electric, 2022, Autopilot, 300mi range',
-    image: 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=400&q=80',
-    location: 'San Francisco, CA',
-    rating: 4.8,
-    reviews: 127,
-    brand: 'Tesla',
-    model: 'Model 3',
-    year: 2022,
-    fuel_type: 'Electric',
-    transmission: 'Automatic',
-    seats: 5,
-    owner_id: 1
-  },
-  {
-    id: 2,
-    name: 'BMW 3 Series',
-    price: 90,
-    description: 'Luxury, 2021, Sport Package, 250hp',
-    image: 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=400&q=80',
-    location: 'Los Angeles, CA',
-    rating: 4.6,
-    reviews: 89,
-    brand: 'BMW',
-    model: '3 Series',
-    year: 2021,
-    fuel_type: 'Gasoline',
-    transmission: 'Automatic',
-    seats: 5,
-    owner_id: 2
-  },
-  {
-    id: 3,
-    name: 'Toyota Prius',
-    price: 60,
-    description: 'Hybrid, 2020, Great MPG, Spacious',
-    image: 'https://images.unsplash.com/photo-1461632830798-3adb3034e4c8?auto=format&fit=crop&w=400&q=80',
-    location: 'Seattle, WA',
-    rating: 4.7,
-    reviews: 156,
-    brand: 'Toyota',
-    model: 'Prius',
-    year: 2020,
-    fuel_type: 'Hybrid',
-    transmission: 'CVT',
-    seats: 5,
-    owner_id: 3
-  },
-  {
-    id: 4,
-    name: 'Ford Mustang',
-    price: 110,
-    description: 'Convertible, 2019, V8 Engine, Red',
-    image: 'https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=400&q=80',
-    location: 'Miami, FL',
-    rating: 4.5,
-    reviews: 203,
-    brand: 'Ford',
-    model: 'Mustang',
-    year: 2019,
-    fuel_type: 'Gasoline',
-    transmission: 'Manual',
-    seats: 4,
-    owner_id: 4
-  },
-  {
-    id: 5,
-    name: 'Audi A4',
-    price: 95,
-    description: 'Premium, 2021, Quattro AWD, Leather',
-    image: 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=400&q=80',
-    location: 'New York, NY',
-    rating: 4.9,
-    reviews: 78,
-    brand: 'Audi',
-    model: 'A4',
-    year: 2021,
-    fuel_type: 'Gasoline',
-    transmission: 'Automatic',
-    seats: 5,
-    owner_id: 5
-  },
-  {
-    id: 6,
-    name: 'Honda Civic',
-    price: 45,
-    description: 'Reliable, 2020, Great Fuel Economy',
-    image: 'https://images.unsplash.com/photo-1461632830798-3adb3034e4c8?auto=format&fit=crop&w=400&q=80',
-    location: 'Chicago, IL',
-    rating: 4.4,
-    reviews: 234,
-    brand: 'Honda',
-    model: 'Civic',
-    year: 2020,
-    fuel_type: 'Gasoline',
-    transmission: 'Automatic',
-    seats: 5,
-    owner_id: 6
-  }
-];
-
-const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+import { vehiclesAPI, authAPI, getUserData } from '../utils/api';
+import { useToastContext } from '../context/ToastContext';
+import { getAllCarImages } from '../utils/carImages';
 
 function Cars() {
+  const toast = useToastContext();
   const [cars, setCars] = useState([]);
   const [filteredCars, setFilteredCars] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -142,26 +38,108 @@ function Cars() {
   const fetchCars = async () => {
     try {
       setLoading(true);
-      // In real app, this would be: const response = await fetch(`${baseUrl}/api/v1/vehicles`);
-      // For now, using mock data
-      setTimeout(() => {
-        setCars(mockCars);
-        setFilteredCars(mockCars);
-        setLoading(false);
-      }, 500);
+      try {
+        // Check if user is admin - admins can see all cars, normal users only see active cars
+        const userData = getUserData();
+        const isAdmin = userData?.role === 'admin' || userData?.role === 'super_admin';
+        
+        // Build filters - normal users only see active cars
+        const filters = {};
+        if (!isAdmin) {
+          filters.is_active = true;
+        }
+        
+        const vehicles = await vehiclesAPI.getAll(filters);
+        // Handle both array response and object with data property
+        const carsData = Array.isArray(vehicles) ? vehicles : (vehicles.data || vehicles.vehicles || []);
+        // Normalize images - use all available images from database (could be any number)
+        const normalizedCars = carsData.map(car => {
+          // Use utility function to get all car images (prioritizes uploaded media)
+          let images = getAllCarImages(car);
+          
+          // Normalize location - convert object to string if needed
+          let locationStr = car.location;
+          if (car.location && typeof car.location === 'object') {
+            const loc = car.location;
+            if (loc.city && loc.state) {
+              locationStr = `${loc.city}, ${loc.state}`;
+            } else if (loc.city) {
+              locationStr = loc.city;
+            } else if (loc.state) {
+              locationStr = loc.state;
+            } else if (loc.name) {
+              locationStr = loc.name;
+            } else if (loc.address) {
+              locationStr = loc.address;
+            } else {
+              locationStr = 'Location not available';
+            }
+          }
+          
+          // Normalize car name from make/model if name doesn't exist
+          const carName = car.name || `${car.make || ''} ${car.model || ''}`.trim() || 'Car';
+          
+          // Normalize price from daily_rate if price doesn't exist
+          const carPrice = car.price || car.daily_rate || 0;
+          
+          return {
+            ...car,
+            name: carName,
+            price: carPrice,
+            image: images[0], // Primary image for display
+            images: images, // All images array
+            location: locationStr // Normalized location string
+          };
+        });
+        
+        // Additional client-side filtering for active cars (backup)
+        const activeCars = normalizedCars.filter(car => car.is_active === true);
+        
+        setCars(activeCars);
+        setFilteredCars(activeCars);
+      } catch (apiError) {
+        console.error('[Cars] API Error:', apiError);
+        // Re-throw to be handled below
+        throw apiError;
+      }
     } catch (error) {
-      console.error('Error fetching cars:', error);
+      console.error('[Cars] Error fetching cars:', error);
+      
+      // Show specific error messages
+      let errorMessage = 'Failed to load cars.';
+      if (error.status === 0) {
+        // Network error - backend not reachable
+        errorMessage = 'Cannot connect to car service. Please ensure the backend is running.';
+        toast.error(errorMessage);
+      } else if (error.message && !error.message.includes('Failed to fetch') && !error.message.includes('NetworkError')) {
+        // Other API errors - error.message is already extracted as string by handleResponse
+        errorMessage = error.message || 'Failed to load cars.';
+        toast.error(errorMessage);
+      }
+      
+      // Set empty arrays instead of mock data
+      setCars([]);
+      setFilteredCars([]);
+    } finally {
       setLoading(false);
     }
   };
 
   const fetchCurrentUser = async () => {
     try {
-      // In real app, this would be: const response = await fetch(`${baseUrl}/api/v1/users/profile`);
-      // For now, using mock user
-      setCurrentUser({ id: 1, name: 'John Doe' });
+      const user = await authAPI.getProfile();
+      setCurrentUser(user);
     } catch (error) {
       console.error('Error fetching user:', error);
+      // Try to get from localStorage as fallback
+      const savedUser = localStorage.getItem('carbnb_user');
+      if (savedUser) {
+        try {
+          setCurrentUser(JSON.parse(savedUser));
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
     }
   };
 
@@ -239,17 +217,16 @@ function Cars() {
     }
 
     try {
-      // In real app, this would be: await fetch(`${baseUrl}/api/v1/vehicles/${carId}`, { method: 'DELETE' });
-      console.log(`Deleting car with ID: ${carId}`);
+      await vehiclesAPI.delete(carId);
       
       // Remove from local state
       setCars(cars.filter(car => car.id !== carId));
       setFilteredCars(filteredCars.filter(car => car.id !== carId));
       
-      alert('Car deleted successfully!');
+      toast.success('Car deleted successfully!');
     } catch (error) {
       console.error('Error deleting car:', error);
-      alert('Error deleting car. Please try again.');
+      toast.error(error.message || 'Error deleting car. Please try again.');
     }
   };
 
