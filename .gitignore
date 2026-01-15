@@ -1,1 +1,10 @@
 node_modules
+newBackend/
+backend/
+.env
+*.bat
+*.sh
+*.py
+*.sql
+*.json
+*.md
