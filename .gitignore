@@ -1,10 +1,20 @@
 node_modules
+
+# Backend directories (not needed for frontend deployment)
 newBackend/
 backend/
+
+# Environment files
 .env
-*.bat
-*.sh
-*.py
-*.sql
-*.json
-*.md
+
+# Scripts and test files (optional - uncomment if you want to exclude them)
+# *.bat
+# *.sh
+# *.py
+# *.sql
+
+# Data files (optional - uncomment if you want to exclude them)
+# dummy_cars_data.json
+
+# Documentation (optional - uncomment if you want to exclude them)
+# *.md
