@@ -149,6 +149,7 @@ function Cars() {
             ...car,
             id: car.id, // Ensure id is preserved
             name: carName,
+            brand: car.make || car.brand || '', // Normalize brand from make
             price: carPrice,
             image: images[0], // Primary image for display
             images: images, // All images array
@@ -237,11 +238,15 @@ function Cars() {
     }
 
     if (filters.fuelType) {
-      filtered = filtered.filter(car => car.fuel_type === filters.fuelType);
+      filtered = filtered.filter(car => 
+        car.fuel_type && car.fuel_type.toLowerCase() === filters.fuelType.toLowerCase()
+      );
     }
 
     if (filters.transmission) {
-      filtered = filtered.filter(car => car.transmission === filters.transmission);
+      filtered = filtered.filter(car => 
+        car.transmission && car.transmission.toLowerCase() === filters.transmission.toLowerCase()
+      );
     }
 
     if (filters.seats) {
