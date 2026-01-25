@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import CarCard from '../components/CarCard';
 import { vehiclesAPI, authAPI, getUserData } from '../utils/api';
@@ -8,6 +8,7 @@ import { getAllCarImages } from '../utils/carImages';
 function Cars() {
   const toast = useToastContext();
   const location = useLocation();
+  const carsGridRef = useRef(null);
   const [cars, setCars] = useState([]);
   const [filteredCars, setFilteredCars] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -280,8 +281,17 @@ function Cars() {
   const handlePageChange = (newPage) => {
     if (newPage < 1 || newPage > totalPages) return;
     setCurrentPage(newPage);
-    // Scroll to top of page
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Scroll to cars grid to show new page results
+    if (carsGridRef.current) {
+      const headerOffset = 100; // Offset for fixed header if any
+      const elementPosition = carsGridRef.current.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+      
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+    }
   };
 
   // Get paginated cars for current page
@@ -481,7 +491,7 @@ function Cars() {
         </div>
 
         {/* Cars Grid */}
-        <div className="cars-grid">
+        <div ref={carsGridRef} className="cars-grid">
           {filteredCars.length === 0 ? (
             <div className="no-cars">
               <h3>No cars found</h3>
