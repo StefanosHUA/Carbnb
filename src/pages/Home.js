@@ -91,26 +91,13 @@ function Home() {
   const [brandImagesLoaded, setBrandImagesLoaded] = useState(false);
   const [currentModelPage, setCurrentModelPage] = useState(0);
   const [currentBrandIndex, setCurrentBrandIndex] = useState(0);
-  // Helper to get tomorrow's date as default start date
-  const getTomorrowDate = () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().split('T')[0];
-  };
-
-  // Helper to get 3 days from now as default end date
-  const getDefaultEndDate = () => {
-    const endDate = new Date();
-    endDate.setDate(endDate.getDate() + 3);
-    return endDate.toISOString().split('T')[0];
-  };
 
   const [searchData, setSearchData] = useState({
     brand: '', // Changed to empty - let user select
     model: '',
     city: '', // City name for simple location search
-    startDate: getTomorrowDate(),
-    endDate: getDefaultEndDate(),
+    startDate: '', // Empty by default - user must select
+    endDate: '', // Empty by default - user must select
   });
 
   const modelsPerPage = 5;
@@ -224,21 +211,24 @@ function Home() {
     e.preventDefault();
     console.log('[Home] Search criteria:', searchData);
     
-    // Validate required fields
-    if (!searchData.startDate || !searchData.endDate) {
-      alert('Please select both pick-up and return dates');
-      return;
-    }
-    
+    // Validate city is required
     if (!searchData.city || !searchData.city.trim()) {
       alert('Please enter a city');
       return;
     }
     
-    // Validate date range
-    if (new Date(searchData.endDate) < new Date(searchData.startDate)) {
-      alert('Return date must be after pick-up date');
+    // If only one date is provided, require both
+    if ((searchData.startDate && !searchData.endDate) || (!searchData.startDate && searchData.endDate)) {
+      alert('Please select both pick-up and return dates, or leave both empty');
       return;
+    }
+    
+    // Validate date range if both dates are provided
+    if (searchData.startDate && searchData.endDate) {
+      if (new Date(searchData.endDate) < new Date(searchData.startDate)) {
+        alert('Return date must be after pick-up date');
+        return;
+      }
     }
     
     try {
@@ -261,10 +251,10 @@ function Home() {
       const searchParams = {
         // REQUIRED fields
         city: cityInput,
-        availability_start_date: searchData.startDate,
-        availability_end_date: searchData.endDate,
         
         // OPTIONAL fields
+        availability_start_date: searchData.startDate || null,
+        availability_end_date: searchData.endDate || null,
         query: queryText || null,
         make: searchData.brand && searchData.brand.trim() !== '' ? searchData.brand : null,
         model: searchData.model && searchData.model.trim() !== '' ? searchData.model : null,
@@ -375,27 +365,25 @@ function Home() {
               </div>
               
               <div className="search-input-group">
-                <label>Pick-up Date</label>
+                <label>Pick-up Date (Optional)</label>
                 <input 
                   type="date" 
                   name="startDate"
                   value={searchData.startDate}
                   onChange={handleSearchChange}
                   className="search-input"
-                  required
                   min={new Date().toISOString().split('T')[0]} // Prevent past dates
                 />
               </div>
               
               <div className="search-input-group">
-                <label>Return Date</label>
+                <label>Return Date (Optional)</label>
                 <input 
                   type="date" 
                   name="endDate"
                   value={searchData.endDate}
                   onChange={handleSearchChange}
                   className="search-input"
-                  required
                   min={searchData.startDate || new Date().toISOString().split('T')[0]} // Must be after start date
                 />
               </div>
