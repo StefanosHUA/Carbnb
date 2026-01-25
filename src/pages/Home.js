@@ -511,11 +511,28 @@ function Home() {
         ) : featuredCars.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px' }}>
             <div style={{ fontSize: '18px', color: '#717171', marginBottom: '16px' }}>
-              No cars available at the moment
+              {getUserData() ? (
+                // Logged-in user message
+                <>No cars available at the moment</>
+              ) : (
+                // Non-logged-in user message
+                <>
+                  <div style={{ marginBottom: '8px' }}>
+                    <Link to="/login" style={{ color: '#FF5A5F', textDecoration: 'none', fontWeight: '600' }}>
+                      Log in
+                    </Link> to see available cars
+                  </div>
+                  <div style={{ fontSize: '16px', color: '#999' }}>
+                    Or use the search above to find a specific car
+                  </div>
+                </>
+              )}
             </div>
-            <Link to="/register-car" className="view-all-btn" style={{ display: 'inline-block' }}>
-              Be the first to list a car
-            </Link>
+            {getUserData() && (
+              <Link to="/register-car" className="view-all-btn" style={{ display: 'inline-block' }}>
+                Be the first to list a car
+              </Link>
+            )}
           </div>
         ) : (
           <div className="car-grid">
