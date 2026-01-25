@@ -365,7 +365,7 @@ function Home() {
                   name="city"
                   value={searchData.city}
                   onChange={handleSearchChange}
-                  placeholder="e.g., Athens, Thessaloniki"
+                  placeholder="e.g., Athens"
                   className="search-input"
                   required
                 />
