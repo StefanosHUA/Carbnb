@@ -237,12 +237,13 @@ const apiRequest = async (endpoint, options = {}) => {
   } = options;
 
   // Validate and refresh token before making authenticated requests
-  // Skip for login, register, and other public endpoints
+  // Skip for login, register, search, and other public endpoints
   const isPublicEndpoint = endpoint.includes('/auth/login') || 
                            endpoint.includes('/auth/register') || 
                            endpoint.includes('/auth/google') ||
                            endpoint.includes('/auth/forgot-password') ||
                            endpoint.includes('/auth/reset-password') ||
+                           endpoint.includes('/search/cars') ||
                            endpoint.includes('/health');
   
   if (includeAuth && !isPublicEndpoint) {
@@ -1248,9 +1249,8 @@ export const searchAPI = {
     const queryString = queryParams.toString();
     const endpoint = `/api/v1/search/cars${queryString ? `?${queryString}` : ''}`;
     
-    // Changed to includeAuth: true for better security and user tracking
-    // If backend requires anonymous access, change back to false
-    return apiRequest(endpoint, { service: 'search', includeAuth: true });
+    // Search does not require authentication - allows anonymous users to browse cars
+    return apiRequest(endpoint, { service: 'search', includeAuth: false });
   },
 };
 
