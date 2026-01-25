@@ -1472,6 +1472,9 @@ body, #root {
   padding: 0 16px;
   color: #717171;
   font-size: 14px;
+  position: relative;
+  z-index: 1;
+  top: 5px;
 }
 
 .social-login {

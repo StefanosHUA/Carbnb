@@ -278,8 +278,20 @@ export const initTokenManager = () => {
   const userData = localStorage.getItem('carbnb_user');
   
   if (token && userData) {
-    console.log('[TokenManager] User session found, starting auto-refresh');
-    startAutoRefresh();
+    // Check if token is valid and not expired
+    const expiry = getTokenExpiry(token);
+    const now = Date.now();
+    
+    if (expiry && expiry > now) {
+      // Token is still valid, start auto-refresh
+      console.log('[TokenManager] User session found with valid token, starting auto-refresh');
+      startAutoRefresh();
+    } else {
+      // Token is expired, clear it out
+      console.log('[TokenManager] Token is expired, clearing session');
+      localStorage.removeItem('carbnb_token');
+      localStorage.removeItem('carbnb_user');
+    }
   } else {
     console.log('[TokenManager] No active session found');
   }

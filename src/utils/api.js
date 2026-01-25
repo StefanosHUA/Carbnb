@@ -243,6 +243,7 @@ const apiRequest = async (endpoint, options = {}) => {
                            endpoint.includes('/auth/google') ||
                            endpoint.includes('/auth/forgot-password') ||
                            endpoint.includes('/auth/reset-password') ||
+                           endpoint.includes('/auth/refresh-token') ||
                            endpoint.includes('/search/cars') ||
                            endpoint.includes('/health');
   
