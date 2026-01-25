@@ -194,8 +194,21 @@ function UserDashboard() {
         // Fetch vehicle details for each favorite ID
         const favoriteCarsPromises = favoriteIds.map(async (carId) => {
           try {
+            console.log(`[UserDashboard] Fetching favorite car with ID: ${carId}`);
             const carData = await vehiclesAPI.getById(carId);
+            console.log(`[UserDashboard] Raw car data for ID ${carId}:`, carData);
+            
             const car = carData.vehicle || carData.data || carData;
+            console.log(`[UserDashboard] Extracted car object:`, car);
+            
+            // Ensure we have a valid car ID - use the carId parameter if car.id is missing
+            if (!car || (!car.id && !carId)) {
+              console.error(`[UserDashboard] Invalid car data for ID ${carId}:`, car);
+              return null;
+            }
+            
+            const validCarId = car.id || carId;
+            console.log(`[UserDashboard] Using car ID: ${validCarId}`);
             
             // Normalize location
             let locationStr = car.location;
@@ -234,14 +247,17 @@ function UserDashboard() {
               images = ['https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=400&q=80'];
             }
             
-            return {
-              id: car.id,
+            const normalizedCar = {
+              id: validCarId,
               name: carName,
               price: carPrice,
               image: images[0],
               location: locationStr,
               rating: car.rating || 0
             };
+            
+            console.log(`[UserDashboard] Normalized favorite car:`, normalizedCar);
+            return normalizedCar;
           } catch (error) {
             console.error(`Error fetching favorite car ${carId}:`, error);
             return null;
@@ -414,13 +430,25 @@ function UserDashboard() {
                 </div>
               ) : (
                 <div className="favorites-grid">
-                  {favorites.map(car => (
-                    <Link key={car.id} to={`/car/${car.id}`} className="favorite-card">
-                      <img src={car.image} alt={car.name} />
-                      <div className="favorite-info">
-                        <h3>{car.name}</h3>
-                        <p><i className="fas fa-map-marker-alt"></i> {(() => {
-                          if (!car.location) return 'Location not available';
+                  {favorites.map(car => {
+                    // Ensure car has a valid ID before rendering
+                    if (!car || !car.id) {
+                      console.error('[UserDashboard] Favorite car missing ID:', car);
+                      return null;
+                    }
+                    
+                    return (
+                      <Link 
+                        key={car.id} 
+                        to={`/car/${car.id}`} 
+                        className="favorite-card"
+                        onClick={() => console.log('[UserDashboard] Navigating to car:', car.id)}
+                      >
+                        <img src={car.image} alt={car.name} />
+                        <div className="favorite-info">
+                          <h3>{car.name}</h3>
+                          <p><i className="fas fa-map-marker-alt"></i> {(() => {
+                            if (!car.location) return 'Location not available';
                           if (typeof car.location === 'string') return car.location;
                           const loc = car.location;
                           if (loc.city && loc.state) return `${loc.city}, ${loc.state}`;
@@ -439,7 +467,8 @@ function UserDashboard() {
                         </div>
                       </div>
                     </Link>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
