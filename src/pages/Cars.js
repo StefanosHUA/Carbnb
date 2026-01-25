@@ -211,15 +211,21 @@ function Cars() {
     let filtered = [...cars];
 
     if (filters.brand) {
-      filtered = filtered.filter(car => car.brand.toLowerCase().includes(filters.brand.toLowerCase()));
+      filtered = filtered.filter(car => 
+        car.brand && car.brand.toLowerCase().includes(filters.brand.toLowerCase())
+      );
     }
 
     if (filters.model) {
-      filtered = filtered.filter(car => car.model.toLowerCase().includes(filters.model.toLowerCase()));
+      filtered = filtered.filter(car => 
+        car.model && car.model.toLowerCase().includes(filters.model.toLowerCase())
+      );
     }
 
     if (filters.location) {
-      filtered = filtered.filter(car => car.location.toLowerCase().includes(filters.location.toLowerCase()));
+      filtered = filtered.filter(car => 
+        car.location && car.location.toLowerCase().includes(filters.location.toLowerCase())
+      );
     }
 
     if (filters.priceMin) {
