@@ -1,11 +1,13 @@
-import React, { lazy, Suspense } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './styles/App.css';
 import Header from './components/Header';
 import Footer from './components/Footer';
+import ScrollToTop from './components/ScrollToTop';
 import { ToastProvider } from './context/ToastContext';
 import { CarCardSkeleton } from './components/LoadingSkeleton';
 import ProtectedRoute from './components/ProtectedRoute';
+import { initTokenManager } from './utils/tokenManager';
 
 // Lazy load pages for better performance
 const Home = lazy(() => import('./pages/Home'));
@@ -15,10 +17,12 @@ const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const CarRegistration = lazy(() => import('./pages/CarRegistration'));
 const Cars = lazy(() => import('./pages/Cars'));
 const CarDetail = lazy(() => import('./pages/CarDetail'));
+const SearchResults = lazy(() => import('./pages/SearchResults'));
 const Booking = lazy(() => import('./pages/Booking'));
 const Payment = lazy(() => import('./pages/Payment'));
 const UserDashboard = lazy(() => import('./pages/UserDashboard'));
 const OwnerDashboard = lazy(() => import('./pages/OwnerDashboard'));
+const ListingEdit = lazy(() => import('./pages/ListingEdit'));
 const Admin = lazy(() => import('./pages/Admin'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
@@ -30,9 +34,15 @@ const PageLoader = () => (
 );
 
 function App() {
+  // Initialize token manager on app mount
+  useEffect(() => {
+    initTokenManager();
+  }, []);
+
   return (
     <ToastProvider>
       <Router>
+        <ScrollToTop />
         <div className="App">
           <Header />
           <Suspense fallback={<PageLoader />}>
@@ -43,12 +53,14 @@ function App() {
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/register-car" element={<CarRegistration />} />
               <Route path="/cars" element={<Cars />} />
+              <Route path="/search" element={<SearchResults />} />
               <Route path="/car/:id" element={<CarDetail />} />
               <Route path="/book/:id" element={<Booking />} />
               <Route path="/payment/:id" element={<Payment />} />
               <Route path="/dashboard" element={<UserDashboard />} />
               <Route path="/dashboard/bookings" element={<UserDashboard />} />
               <Route path="/owner/dashboard" element={<OwnerDashboard />} />
+              <Route path="/owner/listing/:id" element={<ListingEdit />} />
               <Route 
                 path="/admin" 
                 element={

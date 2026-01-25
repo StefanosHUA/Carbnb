@@ -1,0 +1,280 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database for User Service
+  user-db:
+    image: postgres:15-alpine
+    container_name: carbnb-user-db
+    environment:
+      POSTGRES_DB: user_service_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - user_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - carbnb-network
+
+  # PostgreSQL Database for Car Service
+  car-db:
+    image: postgres:15-alpine
+    container_name: carbnb-car-db
+    environment:
+      POSTGRES_DB: car_service_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - car_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - carbnb-network
+
+  # PostgreSQL Database for Booking Service
+  booking-db:
+    image: postgres:15-alpine
+    container_name: carbnb-booking-db
+    environment:
+      POSTGRES_DB: booking_service_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - booking_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - carbnb-network
+
+  # Redis for caching and sessions
+  redis:
+    image: redis:7-alpine
+    container_name: carbnb-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - carbnb-network
+
+  # Elasticsearch for search service
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: carbnb-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - carbnb-network
+
+  # RabbitMQ for message queue
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: carbnb-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - carbnb-network
+
+  # User Service
+  user-service:
+    build:
+      context: ./newBackend/car-rental-backend-v2/user_service
+      dockerfile: Dockerfile
+    container_name: carbnb-user-service
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@user-db:5432/user_service_db
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET_KEY=your-secret-key-change-in-production
+      - JWT_ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+    volumes:
+      - ./newBackend/car-rental-backend-v2/user_service:/app
+    depends_on:
+      user-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - carbnb-network
+    restart: unless-stopped
+
+  # Car Service
+  car-service:
+    build:
+      context: ./newBackend/car-rental-backend-v2/car_service
+      dockerfile: Dockerfile
+    container_name: carbnb-car-service
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@car-db:5432/car_service_db
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
+    volumes:
+      - ./newBackend/car-rental-backend-v2/car_service:/app
+    depends_on:
+      car-db:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - carbnb-network
+    restart: unless-stopped
+
+  # Booking Service
+  booking-service:
+    build:
+      context: ./newBackend/car-rental-backend-v2/booking_service
+      dockerfile: Dockerfile
+    container_name: carbnb-booking-service
+    ports:
+      - "8003:8003"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@booking-db:5432/booking_service_db
+      - USER_SERVICE_URL=http://user-service:8001
+      - CAR_SERVICE_URL=http://car-service:8002
+    volumes:
+      - ./newBackend/car-rental-backend-v2/booking_service:/app
+    depends_on:
+      booking-db:
+        condition: service_healthy
+    networks:
+      - carbnb-network
+    restart: unless-stopped
+
+  # Search Service
+  search-service:
+    build:
+      context: ./newBackend/car-rental-backend-v2/search_service
+      dockerfile: Dockerfile
+    container_name: carbnb-search-service
+    ports:
+      - "8004:8004"
+    environment:
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - CAR_SERVICE_URL=http://car-service:8002
+    volumes:
+      - ./newBackend/car-rental-backend-v2/search_service:/app
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - carbnb-network
+    restart: unless-stopped
+
+  # Gateway API
+  gateway:
+    build:
+      context: ./newBackend/car-rental-backend-v2/gateway_api
+      dockerfile: Dockerfile
+    container_name: carbnb-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - USER_SERVICE_URL=http://user-service:8001
+      - CAR_SERVICE_URL=http://car-service:8002
+      - BOOKING_SERVICE_URL=http://booking-service:8003
+      - SEARCH_SERVICE_URL=http://search-service:8004
+      - GATEWAY_HOST=0.0.0.0
+      - GATEWAY_PORT=8000
+      - REQUEST_TIMEOUT=30.0
+    volumes:
+      - ./newBackend/car-rental-backend-v2/gateway_api:/app
+    depends_on:
+      - user-service
+      - car-service
+      - booking-service
+      - search-service
+    networks:
+      - carbnb-network
+    restart: unless-stopped
+
+  # Frontend (React App)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: carbnb-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_USER_SERVICE_URL=http://localhost:8000/user
+      - REACT_APP_VEHICLE_SERVICE_URL=http://localhost:8000/car
+      - REACT_APP_BOOKING_SERVICE_URL=http://localhost:8000/book
+      - REACT_APP_SEARCH_SERVICE_URL=http://localhost:8000/search
+      - REACT_APP_ENV=development
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - /app/node_modules
+    depends_on:
+      - gateway
+    networks:
+      - carbnb-network
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+networks:
+  carbnb-network:
+    driver: bridge
+
+volumes:
+  user_db_data:
+  car_db_data:
+  booking_db_data:
+  redis_data:
+  elasticsearch_data:
+  rabbitmq_data:
+

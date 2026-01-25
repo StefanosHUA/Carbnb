@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import CarCard from '../components/CarCard';
 import { vehiclesAPI, authAPI, getUserData } from '../utils/api';
 import { useToastContext } from '../context/ToastContext';
@@ -7,6 +7,7 @@ import { getAllCarImages } from '../utils/carImages';
 
 function Cars() {
   const toast = useToastContext();
+  const location = useLocation();
   const [cars, setCars] = useState([]);
   const [filteredCars, setFilteredCars] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,11 +25,67 @@ function Cars() {
   });
   const [currentUser, setCurrentUser] = useState(null);
 
-  // Fetch cars from API
+  // Fetch cars from API or use search results
   useEffect(() => {
-    fetchCars();
-    fetchCurrentUser();
-  }, []);
+    // Check if we have search results from navigation
+    if (location.state?.fromSearch && location.state?.searchResults) {
+      console.log('[Cars] Using search results from Home page');
+      const searchResults = location.state.searchResults;
+      
+      // Normalize search results to match car format
+      const normalizedCars = Array.isArray(searchResults) ? searchResults.map(car => {
+        // Use utility function to get all car images
+        let images = getAllCarImages(car);
+        
+        // Normalize location
+        let locationStr = car.location;
+        if (car.location && typeof car.location === 'object') {
+          const loc = car.location;
+          if (loc.city && loc.state) {
+            locationStr = `${loc.city}, ${loc.state}`;
+          } else if (loc.city) {
+            locationStr = loc.city;
+          } else if (loc.state) {
+            locationStr = loc.state;
+          } else if (loc.name) {
+            locationStr = loc.name;
+          } else if (loc.address) {
+            locationStr = loc.address;
+          } else {
+            locationStr = 'Location not available';
+          }
+        }
+        
+        // Normalize car name from make/model if name doesn't exist
+        const carName = car.name || `${car.make || ''} ${car.model || ''}`.trim() || 'Car';
+        
+        // Normalize price from daily_rate if price doesn't exist
+        const carPrice = car.price || car.daily_rate || 0;
+        
+        return {
+          ...car,
+          id: car.id, // Ensure id is preserved
+          name: carName,
+          brand: car.make || car.brand || '',
+          price: carPrice,
+          image: images[0], // Primary image for display
+          images: images, // All images array
+          location: locationStr // Normalized location string
+        };
+      }) : [];
+      
+      setCars(normalizedCars);
+      setFilteredCars(normalizedCars);
+      setLoading(false);
+      
+      // Clear location state to prevent reusing on refresh
+      window.history.replaceState({}, document.title);
+    } else {
+      // Normal flow - fetch all cars
+      fetchCars();
+      fetchCurrentUser();
+    }
+  }, [location.state]);
 
   // Apply filters when filters change
   useEffect(() => {
@@ -84,6 +141,7 @@ function Cars() {
           
           return {
             ...car,
+            id: car.id, // Ensure id is preserved
             name: carName,
             price: carPrice,
             image: images[0], // Primary image for display

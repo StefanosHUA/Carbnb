@@ -41,3 +41,11 @@ echo "To view logs: docker logs carbnb-postgres"
 
 
 
+
+
+
+
+
+
+
+

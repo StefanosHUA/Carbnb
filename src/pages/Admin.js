@@ -27,6 +27,10 @@ function Admin() {
   const [usersPage, setUsersPage] = useState(1);
   const [usersPerPage] = useState(20);
   const [usersTotal, setUsersTotal] = useState(0);
+  const [carsPage, setCarsPage] = useState(1);
+  const [carsPerPage] = useState(10);
+  const [carsTotal, setCarsTotal] = useState(0);
+  const [carsStatusFilter, setCarsStatusFilter] = useState('all'); // 'all', 'active', 'inactive'
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [loadingCars, setLoadingCars] = useState(false);
   const [loadingBookings, setLoadingBookings] = useState(false);
@@ -99,7 +103,7 @@ function Admin() {
     if (activeTab === 'cars') {
       loadCars();
     }
-  }, [activeTab]);
+  }, [activeTab, carsPage, carsStatusFilter]);
 
   // Load bookings
   useEffect(() => {
@@ -119,10 +123,37 @@ function Admin() {
       // Load user stats
       const userStats = await usersAPI.getStats();
       
-      // Load vehicles count
-      const vehiclesData = await vehiclesAPI.getAll({ limit: 1 });
-      const totalCars = vehiclesData?.total || vehiclesData?.length || 0;
-      const activeCars = vehiclesData?.filter?.(v => v.is_active)?.length || 0;
+      // Load vehicles count - backend max limit is 1000, so we need to paginate if needed
+      let allVehicles = [];
+      let skip = 0;
+      const limit = 1000; // Backend maximum
+      let hasMore = true;
+      
+      // Fetch all vehicles in batches
+      while (hasMore) {
+        const vehiclesData = await vehiclesAPI.getAll({ skip, limit });
+        
+        if (Array.isArray(vehiclesData)) {
+          allVehicles = allVehicles.concat(vehiclesData);
+          hasMore = vehiclesData.length === limit; // If we got a full page, there might be more
+          skip += limit;
+        } else if (vehiclesData?.items) {
+          allVehicles = allVehicles.concat(vehiclesData.items);
+          hasMore = vehiclesData.items.length === limit;
+          skip += limit;
+        } else {
+          hasMore = false;
+        }
+        
+        // Safety check to prevent infinite loops
+        if (skip > 10000) {
+          console.warn('Safety limit reached while fetching vehicles');
+          break;
+        }
+      }
+      
+      const totalCars = allVehicles.length;
+      const activeCars = allVehicles.filter(v => v.is_active).length;
       
       // Load bookings count
       const bookingsData = await bookingsAPI.getAll({ page_size: 1 });
@@ -175,18 +206,43 @@ function Admin() {
   const loadCars = async () => {
     setLoadingCars(true);
     try {
-      const response = await vehiclesAPI.getAll({ limit: 100 });
+      const skip = (carsPage - 1) * carsPerPage;
+      const filters = { skip, limit: carsPerPage };
+      
+      // Add status filter if not 'all'
+      if (carsStatusFilter === 'active') {
+        filters.is_active = 'true'; // Convert to string for URL query param
+      } else if (carsStatusFilter === 'inactive') {
+        filters.is_active = 'false'; // Convert to string for URL query param
+      }
+      
+      console.log('[Admin] Loading cars with filters:', filters);
+      const response = await vehiclesAPI.getAll(filters);
+      
       if (Array.isArray(response)) {
         setCars(response);
+        // If no total is provided, estimate based on whether we got a full page
+        if (response.length < carsPerPage) {
+          setCarsTotal((carsPage - 1) * carsPerPage + response.length);
+        } else {
+          // Estimate there might be more
+          setCarsTotal(carsPage * carsPerPage + 1);
+        }
       } else if (response?.items) {
         setCars(response.items);
+        setCarsTotal(response.total || response.items.length);
+      } else if (response?.total !== undefined) {
+        setCars(response.data || []);
+        setCarsTotal(response.total);
       } else {
         setCars([]);
+        setCarsTotal(0);
       }
     } catch (error) {
       console.error('Error loading cars:', error);
       toast.error('Failed to load vehicles');
       setCars([]);
+      setCarsTotal(0);
     } finally {
       setLoadingCars(false);
     }
@@ -329,6 +385,24 @@ function Admin() {
     } catch (error) {
       console.error('Error cancelling booking:', error);
       toast.error(error.message || 'Failed to cancel booking');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleApproveBooking = async (bookingId) => {
+    if (!window.confirm('Are you sure you want to approve this booking?')) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await bookingsAPI.updateStatus(bookingId, 'confirmed');
+      toast.success('Booking approved successfully');
+      loadBookings();
+    } catch (error) {
+      console.error('Error approving booking:', error);
+      toast.error(error.message || 'Failed to approve booking');
     } finally {
       setIsLoading(false);
     }
@@ -781,9 +855,54 @@ function Admin() {
         </div>
       </div>
       
+      {/* Filter Controls */}
+      <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <label style={{ fontWeight: '500', color: '#222' }}>Filter by Status:</label>
+        <select
+          value={carsStatusFilter}
+          onChange={(e) => {
+            setCarsStatusFilter(e.target.value);
+            setCarsPage(1); // Reset to page 1 when filter changes
+          }}
+          style={{
+            padding: '8px 12px',
+            borderRadius: '6px',
+            border: '1px solid #ddd',
+            fontSize: '14px',
+            cursor: 'pointer',
+            background: '#fff',
+            minWidth: '150px'
+          }}
+        >
+          <option value="all">All Cars</option>
+          <option value="active">Active Only</option>
+          <option value="inactive">Inactive Only</option>
+        </select>
+        {carsStatusFilter !== 'all' && (
+          <button
+            onClick={() => {
+              setCarsStatusFilter('all');
+              setCarsPage(1);
+            }}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '6px',
+              border: '1px solid #ddd',
+              background: '#fff',
+              color: '#717171',
+              fontSize: '13px',
+              cursor: 'pointer'
+            }}
+          >
+            Clear Filter
+          </button>
+        )}
+      </div>
+      
       {loadingCars ? (
         <div style={{ textAlign: 'center', padding: '40px' }}>Loading vehicles...</div>
       ) : (
+        <>
       <div className="table-container">
         <table className="admin-table">
           <thead>
@@ -879,6 +998,51 @@ function Admin() {
           </tbody>
         </table>
       </div>
+          
+          <div className="pagination" style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0' }}>
+            <div style={{ color: '#717171', fontSize: '14px' }}>
+              Showing page {carsPage} of {Math.ceil(carsTotal / carsPerPage) || 1}
+            </div>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              {carsPage > 1 && (
+                <button 
+                  onClick={() => setCarsPage(p => Math.max(1, p - 1))}
+                  disabled={loadingCars}
+                  style={{ 
+                    padding: '8px 16px', 
+                    borderRadius: '6px',
+                    border: '1px solid #2563eb',
+                    background: '#fff',
+                    color: '#2563eb',
+                    cursor: loadingCars ? 'not-allowed' : 'pointer',
+                    fontWeight: '500',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  ← Previous
+                </button>
+              )}
+              {carsPage < Math.ceil(carsTotal / carsPerPage) && (
+                <button 
+                  onClick={() => setCarsPage(p => p + 1)}
+                  disabled={loadingCars}
+                  style={{ 
+                    padding: '8px 16px', 
+                    borderRadius: '6px',
+                    border: '1px solid #2563eb',
+                    background: '#2563eb',
+                    color: '#fff',
+                    cursor: loadingCars ? 'not-allowed' : 'pointer',
+                    fontWeight: '500',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Next →
+                </button>
+              )}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
@@ -941,6 +1105,15 @@ function Admin() {
                         >
                           View
                         </button>
+                        {booking.status === 'pending' && (
+                          <button 
+                            className="action-btn approve"
+                            onClick={() => handleApproveBooking(booking.id)}
+                            disabled={isLoading}
+                          >
+                            Approve
+                          </button>
+                        )}
                         {(booking.status === 'pending' || booking.status === 'confirmed') && (
                           <button 
                             className="action-btn delete"
@@ -984,8 +1157,28 @@ function Admin() {
     if (!showDocumentsModal) return null;
 
     return (
-      <div className="modal-overlay" onClick={() => setShowDocumentsModal(false)}>
-        <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '90vh', overflow: 'auto' }}>
+      <div className="modal-overlay" onClick={() => setShowDocumentsModal(false)} style={{ 
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10000,
+        padding: '20px'
+      }}>
+        <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ 
+          maxWidth: '800px', 
+          width: '100%',
+          maxHeight: '90vh', 
+          overflow: 'auto',
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)'
+        }}>
           <div className="modal-header">
             <h2>
               Documents for {selectedUser?.first_name && selectedUser?.last_name 

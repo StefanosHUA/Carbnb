@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import CarCard from '../components/CarCard';
-import { vehiclesAPI, getUserData } from '../utils/api';
+import { vehiclesAPI, searchAPI, getUserData } from '../utils/api';
 import { getAllCarImages } from '../utils/carImages';
 
 // Import brand logos
@@ -85,21 +85,32 @@ const popularModels = [
 ];
 
 function Home() {
+  const navigate = useNavigate();
   const [featuredCars, setFeaturedCars] = useState([]);
   const [loadingCars, setLoadingCars] = useState(true);
   const [brandImagesLoaded, setBrandImagesLoaded] = useState(false);
   const [currentModelPage, setCurrentModelPage] = useState(0);
   const [currentBrandIndex, setCurrentBrandIndex] = useState(0);
+  // Helper to get tomorrow's date as default start date
+  const getTomorrowDate = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toISOString().split('T')[0];
+  };
+
+  // Helper to get 3 days from now as default end date
+  const getDefaultEndDate = () => {
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + 3);
+    return endDate.toISOString().split('T')[0];
+  };
+
   const [searchData, setSearchData] = useState({
-    brand: allBrands[0].name,
+    brand: '', // Changed to empty - let user select
     model: '',
-    location: '',
-    startDate: '',
-    endDate: '',
-    priceRange: '',
-    fuelType: '',
-    transmission: '',
-    seats: ''
+    location: '39209', // Default to a sample postal code (French format)
+    startDate: getTomorrowDate(),
+    endDate: getDefaultEndDate(),
   });
 
   const modelsPerPage = 5;
@@ -179,6 +190,7 @@ function Home() {
           
           return {
             ...car,
+            id: car.id, // Ensure id is preserved
             name: carName,
             price: carPrice,
             image: images[0], // Primary image for display
@@ -208,10 +220,126 @@ function Home() {
     });
   };
 
-  const handleSearch = (e) => {
+  const handleSearch = async (e) => {
     e.preventDefault();
-    console.log('Search criteria:', searchData);
-    // TODO: Implement search functionality with backend
+    console.log('[Home] Search criteria:', searchData);
+    
+    // Validate required fields (as per Elasticsearch API requirements)
+    if (!searchData.startDate || !searchData.endDate) {
+      alert('Please select both pick-up and return dates');
+      return;
+    }
+    
+    if (!searchData.location) {
+      alert('Please enter a location (city or postal code)');
+      return;
+    }
+    
+    // Validate date range
+    if (new Date(searchData.endDate) < new Date(searchData.startDate)) {
+      alert('Return date must be after pick-up date');
+      return;
+    }
+    
+    try {
+      // Parse location - try to extract postal code, otherwise use as city
+      // Elasticsearch supports: postal_code (required), city, state, country (optional)
+      const locationInput = searchData.location.trim();
+      const postalCode = extractPostalCode(locationInput);
+      
+      // Build search query (full-text search on make and model)
+      // This is optional - Elasticsearch will use it for fuzzy matching
+      let queryText = null;
+      if (searchData.brand && searchData.brand.trim() !== '') {
+        if (searchData.model && searchData.model.trim() !== '') {
+          queryText = `${searchData.brand} ${searchData.model}`;
+        } else {
+          queryText = searchData.brand;
+        }
+      } else if (searchData.model && searchData.model.trim() !== '') {
+        queryText = searchData.model;
+      }
+      
+      // Validate postal code - must be provided
+      if (!postalCode && !locationInput) {
+        alert('Please enter a location (postal code or city name)');
+        return;
+      }
+      
+      // Build search parameters - ONLY fields supported by Elasticsearch
+      const searchParams = {
+        // REQUIRED fields for Elasticsearch
+        postal_code: postalCode || locationInput, // Use postal code if found, otherwise use location as postal code
+        availability_start_date: searchData.startDate,
+        availability_end_date: searchData.endDate,
+        
+        // OPTIONAL fields supported by Elasticsearch
+        query: queryText || null, // Full-text search on make and model
+        make: searchData.brand && searchData.brand.trim() !== '' ? searchData.brand : null,
+        model: searchData.model && searchData.model.trim() !== '' ? searchData.model : null,
+      };
+      
+      // Remove null/undefined/empty values
+      Object.keys(searchParams).forEach(key => {
+        if (searchParams[key] === null || searchParams[key] === undefined || searchParams[key] === '') {
+          delete searchParams[key];
+        }
+      });
+      
+      console.log('[Home] Calling search API with params:', searchParams);
+      
+      // Build URL with search parameters
+      const queryParams = new URLSearchParams();
+      Object.keys(searchParams).forEach(key => {
+        if (searchParams[key] !== null && searchParams[key] !== undefined && searchParams[key] !== '') {
+          queryParams.append(key, String(searchParams[key]));
+        }
+      });
+      
+      // Navigate to search results page with query parameters
+      navigate(`/search?${queryParams.toString()}`);
+      
+    } catch (error) {
+      console.error('[Home] Search error:', error);
+      alert(`Search failed: ${error.message || 'Please try again later'}`);
+    }
+  };
+  
+  /**
+   * Extract postal code from location string
+   * Greek postal codes are 5 digits (e.g., 11853, 10431)
+   * Also handles other formats like US, UK, etc.
+   */
+  const extractPostalCode = (location) => {
+    if (!location) return null;
+    
+    // Try to extract postal code patterns:
+    // - 5 digits (Greek format: 11853, 10431) - prioritize this
+    // - 5 digits (US format: 12345)
+    // - 5 digits with dash (US format: 12345-6789)
+    // - Alphanumeric (e.g., UK format: SW1A 1AA)
+    const postalCodePattern = /\b\d{5}(-\d{4})?\b|\b[A-Z0-9]{3,10}\b/i;
+    const match = location.match(postalCodePattern);
+    
+    if (match) {
+      // Return the postal code (remove dash if present, keep only 5 digits for Greek format)
+      const code = match[0].toUpperCase();
+      // If it's a 5-digit code with dash (US format), take only the first 5 digits
+      if (code.match(/^\d{5}-\d{4}$/)) {
+        return code.split('-')[0];
+      }
+      return code;
+    }
+    
+    // If no postal code pattern found, check if the entire string is a 5-digit number (Greek postal code)
+    const allDigits = location.trim().replace(/\s+/g, '');
+    if (/^\d{5}$/.test(allDigits)) {
+      return allDigits;
+    }
+    
+    // If no postal code found, return null
+    // The caller will use the full location string as postal_code
+    return null;
   };
 
   const handleNextModels = () => {
@@ -256,6 +384,7 @@ function Home() {
                   onChange={handleSearchChange}
                   className="search-select"
                 >
+                  <option value="">All Brands</option>
                   {allBrands.map((brand) => (
                     <option key={brand.name} value={brand.name}>{brand.name}</option>
                   ))}
@@ -281,9 +410,13 @@ function Home() {
                   name="location"
                   value={searchData.location}
                   onChange={handleSearchChange}
-                  placeholder="Where do you want to pick up?"
+                  placeholder="e.g., 39209 or Athens"
                   className="search-input"
+                  required
                 />
+                <small style={{ fontSize: '11px', color: '#666', marginTop: '4px', display: 'block' }}>
+                  Enter postal code (e.g., 39209) or city name
+                </small>
               </div>
               
               <div className="search-input-group">
@@ -294,6 +427,8 @@ function Home() {
                   value={searchData.startDate}
                   onChange={handleSearchChange}
                   className="search-input"
+                  required
+                  min={new Date().toISOString().split('T')[0]} // Prevent past dates
                 />
               </div>
               
@@ -305,6 +440,8 @@ function Home() {
                   value={searchData.endDate}
                   onChange={handleSearchChange}
                   className="search-input"
+                  required
+                  min={searchData.startDate || new Date().toISOString().split('T')[0]} // Must be after start date
                 />
               </div>
               

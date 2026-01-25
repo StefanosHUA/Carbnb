@@ -1,20 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useToastContext } from '../context/ToastContext';
 import { vehiclesAPI } from '../utils/api';
 
 function VehiclePhotoUpload({ vehicleId, existingPhotos = [], onPhotosUpdated }) {
   const toast = useToastContext();
   const fileInputRef = useRef(null);
+  const errorHandledRef = useRef(new Set());
   const [uploading, setUploading] = useState(false);
   const [photos, setPhotos] = useState(existingPhotos || []);
   const [previews, setPreviews] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchPhotos();
-  }, [vehicleId]);
-
-  const fetchPhotos = async () => {
+  const fetchPhotos = useCallback(async () => {
     try {
       setLoading(true);
       const media = await vehiclesAPI.getMedia(vehicleId);
@@ -37,7 +34,12 @@ function VehiclePhotoUpload({ vehicleId, existingPhotos = [], onPhotosUpdated })
     } finally {
       setLoading(false);
     }
-  };
+  }, [vehicleId]);
+
+  useEffect(() => {
+    fetchPhotos();
+  }, [fetchPhotos]);
+
 
   const handleFileSelect = async (e) => {
     const files = Array.from(e.target.files);
@@ -48,7 +50,7 @@ function VehiclePhotoUpload({ vehicleId, existingPhotos = [], onPhotosUpdated })
     const invalidFiles = [];
 
     files.forEach(file => {
-      const validTypes = ['image/jpeg', 'image/jpg', 'application/pdf'];
+      const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
       const maxSize = 10 * 1024 * 1024; // 10MB
 
       // Check file type - handle both MIME type and file extension (same logic as SecureFileUpload)
@@ -63,7 +65,6 @@ function VehiclePhotoUpload({ vehicleId, existingPhotos = [], onPhotosUpdated })
       } else if (!file.type || file.type === 'application/octet-stream') {
         // Fallback to extension check if MIME type is missing or generic
         const extensionToMimeType = {
-          '.pdf': 'application/pdf',
           '.jpg': 'image/jpeg',
           '.jpeg': 'image/jpeg',
           '.png': 'image/png',
@@ -82,7 +83,7 @@ function VehiclePhotoUpload({ vehicleId, existingPhotos = [], onPhotosUpdated })
       }
 
       if (!isValidType) {
-        invalidFiles.push(`${file.name}: Invalid file type (only JPEG and PDF allowed)`);
+        invalidFiles.push(`${file.name}: Invalid file type (only JPEG and PNG allowed)`);
       } else if (file.size > maxSize) {
         invalidFiles.push(`${file.name}: File too large (max 10MB)`);
       } else {
@@ -153,10 +154,12 @@ function VehiclePhotoUpload({ vehicleId, existingPhotos = [], onPhotosUpdated })
       if (successful > 0) {
         toast.success(`Successfully uploaded ${successful} photo(s)`);
         // Refresh photos
-        const updatedPhotos = await vehiclesAPI.getMedia(vehicleId);
-        setPhotos(updatedPhotos || []);
+        await fetchPhotos();
+        // Call callback after a small delay to avoid re-render loops
         if (onPhotosUpdated) {
-          onPhotosUpdated(updatedPhotos || []);
+          setTimeout(() => {
+            onPhotosUpdated();
+          }, 100);
         }
       }
 
@@ -182,10 +185,12 @@ function VehiclePhotoUpload({ vehicleId, existingPhotos = [], onPhotosUpdated })
     try {
       await vehiclesAPI.deleteMedia(mediaId);
       toast.success('Photo deleted successfully');
-      const updatedPhotos = await vehiclesAPI.getMedia(vehicleId);
-      setPhotos(updatedPhotos || []);
+      await fetchPhotos();
+      // Call callback after a small delay to avoid re-render loops
       if (onPhotosUpdated) {
-        onPhotosUpdated(updatedPhotos || []);
+        setTimeout(() => {
+          onPhotosUpdated();
+        }, 100);
       }
     } catch (error) {
       console.error('Error deleting photo:', error);
@@ -195,17 +200,20 @@ function VehiclePhotoUpload({ vehicleId, existingPhotos = [], onPhotosUpdated })
 
   const handleSetPrimary = async (mediaId) => {
     try {
-      // Note: Backend might need an endpoint to set primary, for now we'll re-upload
-      // This is a simplified version - you may need to add a setPrimary endpoint
-      toast.info('Setting primary photo...');
-      // Refresh to get updated data
-      const updatedPhotos = await vehiclesAPI.getMedia(vehicleId);
-      setPhotos(updatedPhotos || []);
+      // Use the setPrimary endpoint if available
+      await vehiclesAPI.setPrimaryMedia(mediaId);
+      toast.success('Primary photo updated successfully');
+      await fetchPhotos();
+      // Call callback after a small delay to avoid re-render loops
       if (onPhotosUpdated) {
-        onPhotosUpdated(updatedPhotos || []);
+        setTimeout(() => {
+          onPhotosUpdated();
+        }, 100);
       }
     } catch (error) {
       console.error('Error setting primary photo:', error);
+      // If setPrimary endpoint doesn't exist, just refresh
+      await fetchPhotos();
       toast.error('Failed to set primary photo');
     }
   };
@@ -222,7 +230,7 @@ function VehiclePhotoUpload({ vehicleId, existingPhotos = [], onPhotosUpdated })
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/jpg,application/pdf,.jpeg,.jpg,.pdf"
+          accept="image/jpeg,image/jpg,image/png,.jpeg,.jpg,.png"
           multiple
           onChange={handleFileSelect}
           disabled={uploading}
@@ -236,7 +244,7 @@ function VehiclePhotoUpload({ vehicleId, existingPhotos = [], onPhotosUpdated })
           <i className="fas fa-camera"></i>
           <span>{uploading ? 'Uploading...' : 'Add Photos'}</span>
         </label>
-        <p className="photo-upload-hint">You can upload multiple files at once (JPEG, PDF, max 10MB each)</p>
+        <p className="photo-upload-hint">You can upload multiple files at once (JPEG, PNG, max 10MB each)</p>
       </div>
 
       {/* Preview Uploading Photos */}
@@ -263,10 +271,9 @@ function VehiclePhotoUpload({ vehicleId, existingPhotos = [], onPhotosUpdated })
             const imageUrl = photo.media_url || photo.url || photo.image;
             const isPdf = photo.mime_type === 'application/pdf' || 
                         (imageUrl && imageUrl.toLowerCase().endsWith('.pdf'));
-            console.log(`Rendering photo ${index}:`, { photo, imageUrl, isPdf });
             
             return (
-              <div key={photo.id || index} className="photo-item">
+              <div key={photo.id || `photo-${index}`} className="photo-item">
                 {isPdf ? (
                   <div className="pdf-preview">
                     <i className="fas fa-file-pdf" style={{ fontSize: '48px', color: '#dc2626' }}></i>
@@ -291,13 +298,28 @@ function VehiclePhotoUpload({ vehicleId, existingPhotos = [], onPhotosUpdated })
                   </div>
                 ) : (
                   <img 
+                    key={`img-${photo.id || index}`}
                     src={imageUrl} 
                     alt={photo.alt_text || `Car photo ${index + 1}`}
                     onError={(e) => {
-                      console.error('Image load error:', { photo, imageUrl, error: e });
-                      e.target.src = 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=400&q=80';
+                      const imageKey = `error-${photo.id || imageUrl || index}`;
+                      // Only handle error once per image to prevent infinite loops
+                      if (!errorHandledRef.current.has(imageKey)) {
+                        errorHandledRef.current.add(imageKey);
+                        const fallbackUrl = 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=400&q=80';
+                        // Only set fallback if current src is not already the fallback
+                        if (e.target.src !== fallbackUrl && e.target.src !== window.location.origin + fallbackUrl) {
+                          e.target.src = fallbackUrl;
+                          e.target.onerror = null; // Prevent infinite error loop
+                        }
+                      }
                     }}
-                    onLoad={() => console.log('Image loaded successfully:', imageUrl)}
+                    onLoad={() => {
+                      // Clear error tracking on successful load
+                      const imageKey = `error-${photo.id || imageUrl || index}`;
+                      errorHandledRef.current.delete(imageKey);
+                    }}
+                    loading="lazy"
                   />
                 )}
                 <div className="photo-overlay">

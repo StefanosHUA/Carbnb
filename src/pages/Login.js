@@ -8,6 +8,7 @@ import {
   createUserFromGoogle 
 } from '../utils/googleAuth';
 import { authAPI } from '../utils/api';
+import { startAutoRefresh } from '../utils/tokenManager';
 import LoginLoading from '../components/LoginLoading';
 
 function Login() {
@@ -25,7 +26,16 @@ function Login() {
   // Initialize Google Auth on component mount
   useEffect(() => {
     initializeGoogleAuth();
-  }, []);
+    
+    // Check if user was redirected due to session expiration
+    const urlParams = new URLSearchParams(window.location.search);
+    const reason = urlParams.get('reason');
+    if (reason === 'session_expired') {
+      toast.warning('Your session has expired. Please log in again.');
+      // Clean up URL
+      window.history.replaceState({}, document.title, '/login');
+    }
+  }, [toast]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -76,28 +86,38 @@ function Login() {
         password: formData.password
       };
       
+      console.log('[Login] Attempting login with:', { login: loginData.login, passwordLength: loginData.password.length });
+      
       // Call API service
       const response = await authAPI.login(loginData);
       
-      // Store user data and token
-      if (response.access_token) {
-        localStorage.setItem('carbnb_token', response.access_token);
-        if (response.user) {
-          localStorage.setItem('carbnb_user', JSON.stringify({
-            ...response.user,
-            token: response.access_token
-          }));
-          // Dispatch custom event to notify Header component
-          window.dispatchEvent(new Event('userUpdated'));
-        }
+      console.log('[Login] Login response received:', response);
+      
+      // Validate response structure
+      if (!response || !response.access_token) {
+        throw new Error('Invalid response from server. Missing access token.');
       }
       
+      // Store user data and token
+      localStorage.setItem('carbnb_token', response.access_token);
+      if (response.user) {
+        localStorage.setItem('carbnb_user', JSON.stringify({
+          ...response.user,
+          token: response.access_token
+        }));
+        // Dispatch custom event to notify Header component
+        window.dispatchEvent(new Event('userUpdated'));
+      } else {
+        console.warn('Login response missing user data:', response);
+      }
+      
+      // Start automatic token refresh
+      startAutoRefresh();
+      
       toast.success('Login successful! Welcome back.');
-      // Keep loading visible during navigation
-      setTimeout(() => {
-        navigate('/cars');
-        // Loading will naturally disappear when component unmounts after navigation
-      }, 2000);
+      // Clear loading state and navigate immediately
+      setIsLoading(false);
+      navigate('/');
     } catch (error) {
       console.error('Login error:', error);
       setIsLoading(false); // Only stop loading on error
@@ -130,50 +150,86 @@ function Login() {
   };
 
   const handleGoogleSignInClick = async () => {
-    setGoogleLoading(true);
+      setGoogleLoading(true);
     
     try {
+      console.log('[Login] Starting Google sign-in...');
       const googleData = await handleGoogleSignIn();
       const googleUser = googleData.user;
+      
+      console.log('[Login] Google sign-in successful, user:', googleUser.email);
       
       // Create user data from Google profile
       const userData = createUserFromGoogle(googleUser);
       
       // Call Google OAuth API - backend expects access_token
-      const response = await authAPI.loginGoogle({
-        access_token: googleData.credential || googleData.access_token,
-        id_token: googleData.credential
-      });
+      // The backend will use this to verify with Google and get user info
+      const googleLoginPayload = {
+        access_token: googleData.access_token
+      };
       
-      // Store user data and token if provided
+      console.log('[Login] Calling backend Google login API with access_token:', googleData.access_token ? 'present' : 'missing');
+      console.log('[Login] Full payload:', { ...googleLoginPayload, access_token: googleLoginPayload.access_token ? '***' + googleLoginPayload.access_token.slice(-10) : 'missing' });
+      
+      const response = await authAPI.loginGoogle(googleLoginPayload);
+      console.log('[Login] Google login response received:', response);
+      
+      // Validate response structure
+      if (!response || (!response.access_token && !response.token)) {
+        throw new Error('Invalid response from server. Missing access token.');
+      }
+      
+      const accessToken = response.access_token || response.token;
+      
+      // Store user data and token
+      localStorage.setItem('carbnb_token', accessToken);
       if (response.user) {
         const userDataWithToken = {
           ...response.user,
-          token: response.token || response.access_token || null
+          token: accessToken
         };
         localStorage.setItem('carbnb_user', JSON.stringify(userDataWithToken));
-        if (response.token || response.access_token) {
-          localStorage.setItem('carbnb_token', response.token || response.access_token);
-        }
         // Dispatch custom event to notify Header component
         window.dispatchEvent(new Event('userUpdated'));
       } else {
-        // Fallback: store the user data we created
-        localStorage.setItem('carbnb_user', JSON.stringify(userData));
+        console.warn('Google login response missing user data:', response);
+        // Fallback: store the user data we created from Google
+        localStorage.setItem('carbnb_user', JSON.stringify({
+          ...userData,
+          token: accessToken
+        }));
         window.dispatchEvent(new Event('userUpdated'));
       }
       
+      // Start automatic token refresh
+      startAutoRefresh();
+      
       toast.success('Google login successful! Welcome to Carbnb.');
-      // Keep loading visible during navigation
-      setTimeout(() => {
-        navigate('/cars');
-        // Loading will naturally disappear when component unmounts after navigation
-      }, 2000);
+      // Clear loading state and navigate immediately
+      setGoogleLoading(false);
+      navigate('/');
       
     } catch (error) {
+      console.error('Google login error:', error);
       // Show user-friendly error message
       setGoogleLoading(false); // Only stop loading on error
-      const errorMessage = error.message || 'Google authentication failed. Please try again.';
+      let errorMessage = 'Google authentication failed. Please try again.';
+      
+      if (error.status === 0) {
+        // Network error - backend not reachable
+        errorMessage = 'Cannot connect to server. Please ensure the backend is running on port 8002.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      } else if (error.data?.detail) {
+        if (typeof error.data.detail === 'string') {
+          errorMessage = error.data.detail;
+        } else if (Array.isArray(error.data.detail)) {
+          errorMessage = error.data.detail.map(e => e.msg || String(e)).join(', ');
+        } else {
+          errorMessage = JSON.stringify(error.data.detail);
+        }
+      }
+      
       setErrors({ general: errorMessage });
       toast.error(errorMessage);
       

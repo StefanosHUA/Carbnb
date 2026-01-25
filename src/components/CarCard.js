@@ -1,21 +1,54 @@
-import React, { useState, memo } from 'react';
+import React, { useState, memo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import ImageGallery from './ImageGallery';
 import { getPrimaryCarImage, getAllCarImages } from '../utils/carImages';
 
 const CarCard = memo(function CarCard({ car }) {
   const [showGallery, setShowGallery] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
   
   // Get all car images (prioritizes uploaded media)
   const carImages = getAllCarImages(car);
   const primaryImage = getPrimaryCarImage(car);
 
-  const handleImageClick = (e) => {
+  // Load favorite status from localStorage
+  useEffect(() => {
+    const favorites = JSON.parse(localStorage.getItem('carbnb_favorites') || '[]');
+    setIsFavorite(favorites.includes(car.id));
+  }, [car.id]);
+
+  const handleGalleryOpen = (e) => {
     e.preventDefault();
+    e.stopPropagation();
     if (carImages.length > 0) {
       setShowGallery(true);
     }
   };
+
+  const handleFavoriteClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const favorites = JSON.parse(localStorage.getItem('carbnb_favorites') || '[]');
+    let newFavorites;
+    
+    if (isFavorite) {
+      // Remove from favorites
+      newFavorites = favorites.filter(id => id !== car.id);
+    } else {
+      // Add to favorites
+      newFavorites = [...favorites, car.id];
+    }
+    
+    localStorage.setItem('carbnb_favorites', JSON.stringify(newFavorites));
+    setIsFavorite(!isFavorite);
+  };
+
+  // Validate car.id before creating link
+  if (!car.id) {
+    console.error('CarCard: car.id is missing', car);
+    return null; // Don't render card if id is missing
+  }
 
   return (
     <>
@@ -25,20 +58,16 @@ const CarCard = memo(function CarCard({ car }) {
             src={primaryImage} 
             alt={car.name} 
             className="car-image"
-            onClick={handleImageClick}
-            style={{ cursor: carImages.length > 0 ? 'pointer' : 'default' }}
           />
           <button 
             className="favorite-btn"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
+            onClick={handleFavoriteClick}
+            title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
           >
-            <i className="far fa-heart"></i>
+            <i className={isFavorite ? 'fas fa-heart' : 'far fa-heart'}></i>
           </button>
           {carImages.length > 1 && (
-            <div className="image-count-badge">
+            <div className="image-count-badge" onClick={handleGalleryOpen} title="View all images">
               <i className="fas fa-images"></i>
               <span>{carImages.length}</span>
             </div>

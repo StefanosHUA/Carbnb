@@ -3,10 +3,13 @@
  * Handles all API communication with the backend microservices
  */
 
+import { isUserActive } from './userActivity';
+
 // Microservice URLs
 const USER_SERVICE_URL = process.env.REACT_APP_USER_SERVICE_URL || 'http://localhost:8002';
 const VEHICLE_SERVICE_URL = process.env.REACT_APP_VEHICLE_SERVICE_URL || 'http://localhost:3003';
 const BOOKING_SERVICE_URL = process.env.REACT_APP_BOOKING_SERVICE_URL || 'http://localhost:8003';
+const SEARCH_SERVICE_URL = process.env.REACT_APP_SEARCH_SERVICE_URL || 'http://localhost:8004';
 const API_BASE_URL = process.env.REACT_APP_API_URL || USER_SERVICE_URL;
 
 /**
@@ -23,6 +26,8 @@ const getServiceUrl = (service) => {
       return USER_SERVICE_URL;
     case 'bookings':
       return BOOKING_SERVICE_URL;
+    case 'search':
+      return SEARCH_SERVICE_URL;
     default:
       // For other services, use API_BASE_URL (could be API Gateway)
       return API_BASE_URL;
@@ -268,40 +273,49 @@ const apiRequest = async (endpoint, options = {}) => {
     const response = await fetch(url, config);
     console.log(`[API] Response status: ${response.status} for ${method} ${url}`);
     
-    // Handle 401 Unauthorized - try to refresh token
+    // Handle 401 Unauthorized - refresh token only if user is active
     if (response.status === 401 && includeAuth && !endpoint.includes('/auth/refresh-token') && !endpoint.includes('/auth/logout')) {
-      try {
-        // Try to refresh token
-        const refreshUrl = `${getServiceUrl('users')}/api/v1/auth/refresh-token`;
-        const refreshHeaders = getHeaders(true, 'application/json');
-        const refreshResponse = await fetch(refreshUrl, {
-          method: 'POST',
-          headers: refreshHeaders,
-        });
-        
-        if (refreshResponse.ok) {
-          const refreshData = await refreshResponse.json();
-          if (refreshData && refreshData.access_token) {
-            localStorage.setItem('carbnb_token', refreshData.access_token);
-            // Retry the original request with new token
-            const newHeaders = getHeaders(true, contentType);
-            if (contentType === null) {
-              delete newHeaders['Content-Type'];
+      // Check if user is actively using the page
+      if (isUserActive()) {
+        try {
+          console.log('[API] User is active, attempting token refresh');
+          // Try to refresh token
+          const refreshUrl = `${getServiceUrl('users')}/api/v1/auth/refresh-token`;
+          const refreshHeaders = getHeaders(true, 'application/json');
+          const refreshResponse = await fetch(refreshUrl, {
+            method: 'POST',
+            headers: refreshHeaders,
+          });
+
+          if (refreshResponse.ok) {
+            const refreshData = await refreshResponse.json();
+            if (refreshData && refreshData.access_token) {
+              localStorage.setItem('carbnb_token', refreshData.access_token);
+              // Retry the original request with new token
+              const newHeaders = getHeaders(true, contentType);
+              if (contentType === null) {
+                delete newHeaders['Content-Type'];
+              }
+              const retryConfig = {
+                ...config,
+                headers: {
+                  ...newHeaders,
+                  ...customHeaders,
+                },
+              };
+              const retryResponse = await fetch(url, retryConfig);
+              return await handleResponse(retryResponse);
             }
-            const retryConfig = {
-              ...config,
-              headers: {
-                ...newHeaders,
-                ...customHeaders,
-              },
-            };
-            const retryResponse = await fetch(url, retryConfig);
-            return await handleResponse(retryResponse);
           }
+        } catch (refreshError) {
+          console.error('[API] Token refresh failed:', refreshError);
+          // If refresh fails, clear auth and let the error propagate
+          localStorage.removeItem('carbnb_token');
+          localStorage.removeItem('carbnb_user');
         }
-      } catch (refreshError) {
-        console.error('[API] Token refresh failed:', refreshError);
-        // If refresh fails, clear auth and let the error propagate
+      } else {
+        console.log('[API] User is inactive, logging out instead of refreshing token');
+        // User is not active, log them out instead of refreshing
         localStorage.removeItem('carbnb_token');
         localStorage.removeItem('carbnb_user');
       }
@@ -620,7 +634,8 @@ export const vehiclesAPI = {
   getAll: async (filters = {}) => {
     const queryParams = new URLSearchParams();
     Object.keys(filters).forEach(key => {
-      if (filters[key]) {
+      // Check for null/undefined but allow false, 0, and empty string
+      if (filters[key] !== null && filters[key] !== undefined && filters[key] !== '') {
         queryParams.append(key, filters[key]);
       }
     });
@@ -636,6 +651,10 @@ export const vehiclesAPI = {
    * GET /api/v1/vehicles/:id
    */
   getById: async (id) => {
+    if (!id || id === 'undefined' || id === 'null') {
+      throw new Error(`Invalid vehicle ID: ${id}`);
+    }
+    console.log('[vehiclesAPI.getById] Fetching vehicle with ID:', id);
     return apiRequest(`/api/v1/vehicles/${id}`, { service: 'vehicles' });
   },
 
@@ -895,6 +914,17 @@ export const vehiclesAPI = {
       service: 'vehicles',
     });
   },
+
+  /**
+   * Set media as primary
+   * PATCH /api/v1/media/:media_id/primary
+   */
+  setPrimaryMedia: async (mediaId) => {
+    return apiRequest(`/api/v1/media/${mediaId}/primary`, {
+      method: 'PATCH',
+      service: 'vehicles',
+    });
+  },
 };
 
 /**
@@ -993,6 +1023,23 @@ export const bookingsAPI = {
     return apiRequest('/api/v1/bookings/check-availability', {
       method: 'POST',
       body: availabilityData,
+      service: 'bookings',
+    });
+  },
+
+  /**
+   * Update booking status (admin only)
+   * PUT /api/v1/bookings/:id/status
+   */
+  updateStatus: async (id, status, cancellationReason = null) => {
+    const body = { status };
+    if (cancellationReason) {
+      body.cancellation_reason = cancellationReason;
+    }
+    
+    return apiRequest(`/api/v1/bookings/${id}/status`, {
+      method: 'PUT',
+      body,
       service: 'bookings',
     });
   },
@@ -1097,6 +1144,86 @@ export const salesAPI = {
 };
 
 /**
+ * Search API
+ * Search service for finding cars using Elasticsearch
+ */
+export const searchAPI = {
+  /**
+   * Search cars using Elasticsearch
+   * GET /api/v1/search/cars
+   * Required: postal_code, availability_start_date, availability_end_date
+   * Optional: query, make, model, category, transmission, fuel_type, min_daily_rate, max_daily_rate, etc.
+   */
+  searchCars: async (searchParams) => {
+    // Build query string from search parameters
+    const queryParams = new URLSearchParams();
+    
+    // Required parameters
+    if (searchParams.postal_code) {
+      queryParams.append('postal_code', searchParams.postal_code);
+    }
+    if (searchParams.availability_start_date) {
+      queryParams.append('availability_start_date', searchParams.availability_start_date);
+    }
+    if (searchParams.availability_end_date) {
+      queryParams.append('availability_end_date', searchParams.availability_end_date);
+    }
+    
+    // Optional parameters
+    if (searchParams.query) {
+      queryParams.append('query', searchParams.query);
+    }
+    if (searchParams.make) {
+      queryParams.append('make', searchParams.make);
+    }
+    if (searchParams.model) {
+      queryParams.append('model', searchParams.model);
+    }
+    if (searchParams.category) {
+      queryParams.append('category', searchParams.category);
+    }
+    if (searchParams.transmission) {
+      queryParams.append('transmission', searchParams.transmission);
+    }
+    if (searchParams.fuel_type) {
+      queryParams.append('fuel_type', searchParams.fuel_type);
+    }
+    if (searchParams.min_daily_rate !== undefined && searchParams.min_daily_rate !== null) {
+      queryParams.append('min_daily_rate', searchParams.min_daily_rate);
+    }
+    if (searchParams.max_daily_rate !== undefined && searchParams.max_daily_rate !== null) {
+      queryParams.append('max_daily_rate', searchParams.max_daily_rate);
+    }
+    if (searchParams.min_seats) {
+      queryParams.append('min_seats', searchParams.min_seats);
+    }
+    if (searchParams.max_seats) {
+      queryParams.append('max_seats', searchParams.max_seats);
+    }
+    if (searchParams.city) {
+      queryParams.append('city', searchParams.city);
+    }
+    if (searchParams.state) {
+      queryParams.append('state', searchParams.state);
+    }
+    if (searchParams.country) {
+      queryParams.append('country', searchParams.country);
+    }
+    if (searchParams.page) {
+      queryParams.append('page', searchParams.page);
+    }
+    if (searchParams.page_size) {
+      queryParams.append('page_size', searchParams.page_size);
+    }
+    
+    const queryString = queryParams.toString();
+    const endpoint = `/api/v1/search/cars${queryString ? `?${queryString}` : ''}`;
+    
+    return apiRequest(endpoint, { service: 'search', includeAuth: false });
+  },
+};
+
+/**
  * Documents API
  * Document management for user verification
  */
@@ -1173,5 +1300,6 @@ export default {
   payments: paymentsAPI,
   upload: uploadAPI,
   sales: salesAPI,
+  search: searchAPI,
   documents: documentsAPI,
 };

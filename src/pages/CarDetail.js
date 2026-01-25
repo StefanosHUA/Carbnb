@@ -16,19 +16,121 @@ function CarDetail() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isFavorite, setIsFavorite] = useState(false);
 
+  // Debug: Log the id parameter
   useEffect(() => {
+    console.log('[CarDetail] Route param id:', id);
+    if (!id || id === 'undefined' || id === 'null') {
+      console.error('[CarDetail] Invalid id from route params:', id);
+      toast.error('Invalid car ID. Please select a car from the listings.');
+      navigate('/cars');
+      return;
+    }
+  }, [id, navigate, toast]);
+
+  useEffect(() => {
+    // Validate id before making API call
+    if (!id || id === 'undefined') {
+      toast.error('Invalid car ID');
+      navigate('/cars');
+      return;
+    }
     fetchCarDetails();
     checkFavoriteStatus();
   }, [id]);
 
   const fetchCarDetails = async () => {
+    // Validate id before making API call
+    if (!id || id === 'undefined') {
+      console.error('Car ID is missing or invalid:', id);
+      toast.error('Invalid car ID');
+      setCar(null);
+      setLoading(false);
+      navigate('/cars');
+      return;
+    }
+
     try {
       setLoading(true);
+      console.log('[CarDetail] Fetching car with ID:', id);
       const carData = await vehiclesAPI.getById(id);
-      // Handle both direct object and nested data property
-      const car = carData.vehicle || carData.data || carData;
+      console.log('[CarDetail] Raw API response:', carData);
+      
+      // Handle response - it might be an array or a single object
+      let car = null;
+      if (Array.isArray(carData)) {
+        // If response is an array, find the car with matching ID
+        const carId = parseInt(id);
+        car = carData.find(c => c.id === carId);
+        if (!car) {
+          // If not found, use first car as fallback
+          car = carData[0];
+          console.warn(`[CarDetail] Car with ID ${carId} not found in array, using first car with ID ${car.id}`);
+        } else {
+          console.log(`[CarDetail] Found car with ID ${carId} in array`);
+        }
+      } else {
+        // Handle both direct object and nested data property
+        car = carData.vehicle || carData.data || carData;
+      }
+      
+      console.log('[CarDetail] Extracted car object:', car);
+      
       // Ensure car has required structure
       if (car) {
+        // Map backend vehicle fields to UI expectations
+        // Brand in UI = make in backend (ALWAYS copy make to brand)
+        car.brand = car.make || car.brand || '';
+        // Vehicle type in UI = category in backend (ALWAYS copy category to vehicle_type)
+        car.vehicle_type = car.category || car.vehicle_type || '';
+        
+        // Ensure all spec fields are properly extracted from backend response
+        // These fields come directly from the database and should always exist
+        car.make = car.make || '';
+        car.model = car.model || '';
+        car.year = car.year || null;
+        car.fuel_type = car.fuel_type || '';
+        car.transmission = car.transmission || '';
+        car.seats = car.seats ?? null;
+        car.doors = car.doors ?? null;
+        car.mileage = car.mileage ?? null;
+        car.color = car.color || '';
+        car.category = car.category || '';
+        
+        console.log('[CarDetail] After field extraction:', {
+          make: car.make,
+          brand: car.brand,
+          model: car.model,
+          year: car.year,
+          fuel_type: car.fuel_type,
+          transmission: car.transmission,
+          seats: car.seats,
+          doors: car.doors,
+          mileage: car.mileage,
+          color: car.color
+        });
+        // Description fallback from condition notes if needed
+        if (!car.description && car.condition_notes) {
+          car.description = car.condition_notes;
+        }
+        // Features may come as JSON string; normalize to array
+        if (car.features && typeof car.features === 'string') {
+          try {
+            const parsed = JSON.parse(car.features);
+            if (Array.isArray(parsed)) {
+              car.features = parsed;
+            } else {
+              car.features = String(car.features)
+                .split(',')
+                .map(f => f.trim())
+                .filter(Boolean);
+            }
+          } catch (e) {
+            car.features = String(car.features)
+              .split(',')
+              .map(f => f.trim())
+              .filter(Boolean);
+          }
+        }
         // Check if car is active - normal users should only see active cars
         const userData = getUserData();
         const isAdmin = userData?.role === 'admin' || userData?.role === 'super_admin';
@@ -57,35 +159,59 @@ function CarDetail() {
         }
         // Use utility function to get all car images (prioritizes uploaded media)
         car.images = getAllCarImages(car);
-        // Normalize location - convert object to string if needed
-        if (car.location && typeof car.location === 'object') {
-          const loc = car.location;
-          if (loc.city && loc.state) {
-            car.location = `${loc.city}, ${loc.state}`;
-          } else if (loc.city) {
-            car.location = loc.city;
-          } else if (loc.state) {
-            car.location = loc.state;
-          } else if (loc.name) {
-            car.location = loc.name;
-          } else if (loc.address) {
-            car.location = loc.address;
-          } else {
-            car.location = 'Location not available';
+        
+        // Create locationString for display, but keep location object for detailed access
+        car.locationString = 'Location not available';
+        const locObj = car.location;
+        if (locObj && typeof locObj === 'object') {
+          if (locObj.city && locObj.state) {
+            car.locationString = `${locObj.city}, ${locObj.state}`;
+          } else if (locObj.city) {
+            car.locationString = locObj.city;
+          } else if (locObj.state) {
+            car.locationString = locObj.state;
+          } else if (locObj.name) {
+            car.locationString = locObj.name;
+          } else if (locObj.address) {
+            car.locationString = locObj.address;
           }
-        } else if (!car.location) {
-          car.location = 'Location not available';
+        } else if (car.location && typeof car.location === 'string') {
+          car.locationString = car.location;
         }
         
         // Normalize car name from make/model if name doesn't exist
         if (!car.name) {
-          car.name = `${car.make || ''} ${car.model || ''}`.trim() || 'Car';
+          car.name = `${car.make || car.brand || ''} ${car.model || ''}`.trim() || 'Car';
         }
         
         // Normalize price from daily_rate if price doesn't exist
-        if (!car.price) {
-          car.price = car.daily_rate || 0;
+        if (car.price === undefined || car.price === null || car.price === 0) {
+          car.price = parseFloat(car.daily_rate) || 0;
+        } else {
+          car.price = parseFloat(car.price) || 0;
         }
+        
+        console.log('[CarDetail] Processed car data:', {
+          id: car.id,
+          name: car.name,
+          make: car.make,
+          brand: car.brand,
+          model: car.model,
+          year: car.year,
+          fuel_type: car.fuel_type,
+          transmission: car.transmission,
+          seats: car.seats,
+          doors: car.doors,
+          mileage: car.mileage,
+          color: car.color,
+          vehicle_type: car.vehicle_type,
+          category: car.category,
+          price: car.price,
+          daily_rate: car.daily_rate,
+          description: car.description,
+          location: car.location,
+          locationString: car.locationString
+        });
         
         setCar(car);
       } else {
@@ -237,27 +363,9 @@ function CarDetail() {
                       <span className="rating-number">{car.rating}</span>
                     </div>
                     <span className="divider">·</span>
-                    <Link to={`/cars?location=${(() => {
-                      if (!car.location) return '';
-                      if (typeof car.location === 'string') return car.location;
-                      const loc = car.location;
-                      if (loc.city && loc.state) return `${loc.city}, ${loc.state}`;
-                      if (loc.city) return loc.city;
-                      if (loc.name) return loc.name;
-                      return '';
-                    })()}`} className="car-location-link">
+                    <Link to={`/cars?location=${encodeURIComponent(car.locationString || '')}`} className="car-location-link">
                       <i className="fas fa-map-marker-alt"></i>
-                      {(() => {
-                        if (!car.location) return 'Location not available';
-                        if (typeof car.location === 'string') return car.location;
-                        const loc = car.location;
-                        if (loc.city && loc.state) return `${loc.city}, ${loc.state}`;
-                        if (loc.city) return loc.city;
-                        if (loc.state) return loc.state;
-                        if (loc.name) return loc.name;
-                        if (loc.address) return loc.address;
-                        return 'Location not available';
-                      })()}
+                      {car.locationString || 'Location not available'}
                     </Link>
                   </div>
                 </div>
@@ -305,43 +413,47 @@ function CarDetail() {
                 <div className="specs-grid">
                   <div className="spec-item">
                     <span className="spec-label">Brand</span>
-                    <span className="spec-value">{car.brand}</span>
+                    <span className="spec-value">{car.brand || car.make || 'N/A'}</span>
                   </div>
                   <div className="spec-item">
                     <span className="spec-label">Model</span>
-                    <span className="spec-value">{car.model}</span>
+                    <span className="spec-value">{car.model || 'N/A'}</span>
                   </div>
                   <div className="spec-item">
                     <span className="spec-label">Year</span>
-                    <span className="spec-value">{car.year}</span>
+                    <span className="spec-value">{car.year ? String(car.year) : 'N/A'}</span>
                   </div>
                   <div className="spec-item">
                     <span className="spec-label">Fuel Type</span>
-                    <span className="spec-value">{car.fuel_type}</span>
+                    <span className="spec-value">{car.fuel_type ? String(car.fuel_type).charAt(0).toUpperCase() + String(car.fuel_type).slice(1) : 'N/A'}</span>
                   </div>
                   <div className="spec-item">
                     <span className="spec-label">Transmission</span>
-                    <span className="spec-value">{car.transmission}</span>
+                    <span className="spec-value">{car.transmission ? String(car.transmission).charAt(0).toUpperCase() + String(car.transmission).slice(1) : 'N/A'}</span>
                   </div>
                   <div className="spec-item">
                     <span className="spec-label">Seats</span>
-                    <span className="spec-value">{car.seats}</span>
+                    <span className="spec-value">{car.seats !== undefined && car.seats !== null ? String(car.seats) : 'N/A'}</span>
                   </div>
                   <div className="spec-item">
                     <span className="spec-label">Doors</span>
-                    <span className="spec-value">{car.doors}</span>
+                    <span className="spec-value">{car.doors !== undefined && car.doors !== null ? String(car.doors) : 'N/A'}</span>
                   </div>
                   <div className="spec-item">
                     <span className="spec-label">Mileage</span>
-                    <span className="spec-value">{car.mileage?.toLocaleString()} miles</span>
+                    <span className="spec-value">
+                      {car.mileage !== undefined && car.mileage !== null
+                        ? `${Number(car.mileage).toLocaleString()} miles`
+                        : 'N/A'}
+                    </span>
                   </div>
                   <div className="spec-item">
                     <span className="spec-label">Color</span>
-                    <span className="spec-value">{car.color}</span>
+                    <span className="spec-value">{car.color ? String(car.color).charAt(0).toUpperCase() + String(car.color).slice(1) : 'N/A'}</span>
                   </div>
                   <div className="spec-item">
                     <span className="spec-label">Type</span>
-                    <span className="spec-value">{car.vehicle_type}</span>
+                    <span className="spec-value">{car.vehicle_type || car.category ? String(car.vehicle_type || car.category).charAt(0).toUpperCase() + String(car.vehicle_type || car.category).slice(1) : 'N/A'}</span>
                   </div>
                 </div>
               </div>
@@ -363,7 +475,15 @@ function CarDetail() {
               <div className="booking-price-section">
                 <div className="price-main">
                   <span className="price-currency">$</span>
-                  <span className="price-amount-new">{typeof car.price === 'number' ? car.price.toFixed(2) : parseFloat(car.price || 0).toFixed(2)}</span>
+                  <span className="price-amount-new">
+                    {(() => {
+                      const rawPrice =
+                        typeof car.price === 'number'
+                          ? car.price
+                          : parseFloat(car.price || car.daily_rate || 0);
+                      return rawPrice.toFixed(2);
+                    })()}
+                  </span>
                 </div>
                 <div className="price-label">per day</div>
               </div>
@@ -426,17 +546,7 @@ function CarDetail() {
                   <div>
                     <div className="info-label">Pickup Location</div>
                     <div className="info-value">
-                      {(() => {
-                        if (!car.location) return 'Location not available';
-                        if (typeof car.location === 'string') return car.location;
-                        const loc = car.location;
-                        if (loc.city && loc.state) return `${loc.city}, ${loc.state}`;
-                        if (loc.city) return loc.city;
-                        if (loc.state) return loc.state;
-                        if (loc.name) return loc.name;
-                        if (loc.address) return loc.address;
-                        return 'Location not available';
-                      })()}
+                      {car.locationString || 'Location not available'}
                     </div>
                   </div>
                 </div>

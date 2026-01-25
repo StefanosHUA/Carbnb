@@ -233,7 +233,7 @@ function Register() {
       toast.success('Registration successful! Welcome to Carbnb!');
       // Keep loading visible during navigation
       setTimeout(() => {
-        navigate('/cars');
+        navigate('/');
         // Loading will naturally disappear when component unmounts after navigation
       }, 2000);
     } catch (error) {
@@ -301,7 +301,7 @@ function Register() {
         toast.success('Google registration successful! Welcome to Carbnb!');
         // Keep loading visible during navigation
         setTimeout(() => {
-          navigate('/cars');
+          navigate('/');
           // Loading will naturally disappear when component unmounts after navigation
         }, 2000);
       } else {

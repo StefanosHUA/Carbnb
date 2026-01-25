@@ -6,7 +6,7 @@ import { vehiclesAPI, salesAPI } from '../utils/api';
 import VehicleAvailabilityManager from '../components/VehicleAvailabilityManager';
 import VehicleDocuments from '../components/VehicleDocuments';
 import CarRegistrationModal from '../components/CarRegistrationModal';
-import VehiclePhotoUpload from '../components/VehiclePhotoUpload';
+import { getPrimaryCarImage } from '../utils/carImages';
 
 function OwnerDashboard() {
   const navigate = useNavigate();
@@ -20,7 +20,6 @@ function OwnerDashboard() {
   const [loading, setLoading] = useState(true);
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [selectedListingForPhotos, setSelectedListingForPhotos] = useState(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('carbnb_user');
@@ -35,6 +34,21 @@ function OwnerDashboard() {
     // Fetch data after user is set
     fetchOwnerData(userData);
   }, []);
+
+  // Refresh listings when returning to this page
+  useEffect(() => {
+    const handleFocus = () => {
+      // Refresh listings when window regains focus (user returns from another page)
+      const savedUser = localStorage.getItem('carbnb_user');
+      if (savedUser && user) {
+        const userData = JSON.parse(savedUser);
+        fetchOwnerData(userData);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [user]);
 
   const fetchOwnerData = async (userData = null) => {
     let currentUser = null;
@@ -134,6 +148,7 @@ function OwnerDashboard() {
       toast.error(error.message || 'Failed to delete listing');
     }
   };
+
 
   const handleViewStatus = async (vehicleId) => {
     try {
@@ -243,8 +258,19 @@ function OwnerDashboard() {
                     };
                     
                     return (
-                    <div key={listing.id} className="listing-card">
-                      <img src={listing.primary_image_url || listing.image || '/default-car.png'} alt={getVehicleName(listing)} />
+                    <div 
+                      key={listing.id} 
+                      className="listing-card" 
+                      onClick={() => navigate(`/owner/listing/${listing.id}`)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <img 
+                        src={getPrimaryCarImage(listing) || '/default-car.png'} 
+                        alt={getVehicleName(listing)}
+                        onError={(e) => {
+                          e.target.src = '/default-car.png';
+                        }}
+                      />
                       <div className="listing-info">
                         <div className="listing-header">
                           <div>
@@ -271,7 +297,7 @@ function OwnerDashboard() {
                             <span>${listing.daily_rate}/day</span>
                           </div>
                         </div>
-                        <div className="listing-actions">
+                        <div className="listing-actions" onClick={(e) => e.stopPropagation()}>
                           <Link to={`/car/${listing.id}`} className="action-link">
                             View
                           </Link>
@@ -283,13 +309,11 @@ function OwnerDashboard() {
                             <i className="fas fa-info-circle"></i> Status
                           </button>
                           <button 
-                            className="photo-btn"
-                            onClick={() => setSelectedListingForPhotos(listing.id)}
-                            title="Manage photos"
+                            className="edit-btn"
+                            onClick={() => navigate(`/owner/listing/${listing.id}`)}
                           >
-                            <i className="fas fa-camera"></i> Photos
+                            Edit
                           </button>
-                          <button className="edit-btn">Edit</button>
                           <button
                             className="delete-btn"
                             onClick={() => handleDeleteListing(listing.id)}
@@ -394,9 +418,6 @@ function OwnerDashboard() {
                         )}
                       </div>
                     </div>
-                    <div className="availability-section">
-                      <VehicleAvailabilityManager vehicleId={selectedVehicle} />
-                    </div>
                   </div>
                 ) : (
                   <div className="error-state">
@@ -413,33 +434,6 @@ function OwnerDashboard() {
           <CarRegistrationModal onClose={handleCloseRegisterModal} />
         )}
 
-        {/* Photo Upload Modal */}
-        {selectedListingForPhotos && (
-          <div className="photo-upload-modal">
-            <div className="modal-overlay" onClick={() => setSelectedListingForPhotos(null)}></div>
-            <div className="modal-content photo-modal-content">
-              <div className="modal-header">
-                <h2>Manage Car Photos</h2>
-                <button className="close-btn" onClick={() => setSelectedListingForPhotos(null)}>
-                  <i className="fas fa-times"></i>
-                </button>
-              </div>
-              <div className="modal-body">
-                <VehiclePhotoUpload 
-                  vehicleId={selectedListingForPhotos}
-                  onPhotosUpdated={() => {
-                    // Refresh listings
-                    const savedUser = localStorage.getItem('carbnb_user');
-                    if (savedUser) {
-                      const userData = JSON.parse(savedUser);
-                      fetchOwnerData(userData);
-                    }
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
