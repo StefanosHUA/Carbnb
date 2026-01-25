@@ -7,7 +7,9 @@ import ScrollToTop from './components/ScrollToTop';
 import { ToastProvider } from './context/ToastContext';
 import { CarCardSkeleton } from './components/LoadingSkeleton';
 import ProtectedRoute from './components/ProtectedRoute';
+import TokenExpiryWarning from './components/TokenExpiryWarning';
 import { initTokenManager } from './utils/tokenManager';
+import './utils/userActivity'; // Auto-initializes on import
 
 // Lazy load pages for better performance
 const Home = lazy(() => import('./pages/Home'));
@@ -34,15 +36,22 @@ const PageLoader = () => (
 );
 
 function App() {
-  // Initialize token manager on app mount
+  // Initialize security features on app mount
   useEffect(() => {
+    console.log('[App] Initializing security features...');
+    
+    // User activity tracker auto-initializes on import
+    // Initialize token manager with auto-refresh
     initTokenManager();
+    
+    console.log('[App] Security features initialized');
   }, []);
 
   return (
     <ToastProvider>
       <Router>
         <ScrollToTop />
+        <TokenExpiryWarning />
         <div className="App">
           <Header />
           <Suspense fallback={<PageLoader />}>

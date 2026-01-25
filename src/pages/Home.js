@@ -108,7 +108,7 @@ function Home() {
   const [searchData, setSearchData] = useState({
     brand: '', // Changed to empty - let user select
     model: '',
-    location: '39209', // Default to a sample postal code (French format)
+    city: '', // City name for simple location search
     startDate: getTomorrowDate(),
     endDate: getDefaultEndDate(),
   });
@@ -224,14 +224,14 @@ function Home() {
     e.preventDefault();
     console.log('[Home] Search criteria:', searchData);
     
-    // Validate required fields (as per Elasticsearch API requirements)
+    // Validate required fields
     if (!searchData.startDate || !searchData.endDate) {
       alert('Please select both pick-up and return dates');
       return;
     }
     
-    if (!searchData.location) {
-      alert('Please enter a location (city or postal code)');
+    if (!searchData.city || !searchData.city.trim()) {
+      alert('Please enter a city');
       return;
     }
     
@@ -242,13 +242,10 @@ function Home() {
     }
     
     try {
-      // Parse location - try to extract postal code, otherwise use as city
-      // Elasticsearch supports: postal_code (required), city, state, country (optional)
-      const locationInput = searchData.location.trim();
-      const postalCode = extractPostalCode(locationInput);
+      // Clean city input
+      const cityInput = searchData.city.trim();
       
       // Build search query (full-text search on make and model)
-      // This is optional - Elasticsearch will use it for fuzzy matching
       let queryText = null;
       if (searchData.brand && searchData.brand.trim() !== '') {
         if (searchData.model && searchData.model.trim() !== '') {
@@ -260,21 +257,15 @@ function Home() {
         queryText = searchData.model;
       }
       
-      // Validate postal code - must be provided
-      if (!postalCode && !locationInput) {
-        alert('Please enter a location (postal code or city name)');
-        return;
-      }
-      
-      // Build search parameters - ONLY fields supported by Elasticsearch
+      // Build search parameters - Simple city-based search
       const searchParams = {
-        // REQUIRED fields for Elasticsearch
-        postal_code: postalCode || locationInput, // Use postal code if found, otherwise use location as postal code
+        // REQUIRED fields
+        city: cityInput,
         availability_start_date: searchData.startDate,
         availability_end_date: searchData.endDate,
         
-        // OPTIONAL fields supported by Elasticsearch
-        query: queryText || null, // Full-text search on make and model
+        // OPTIONAL fields
+        query: queryText || null,
         make: searchData.brand && searchData.brand.trim() !== '' ? searchData.brand : null,
         model: searchData.model && searchData.model.trim() !== '' ? searchData.model : null,
       };
@@ -305,42 +296,6 @@ function Home() {
     }
   };
   
-  /**
-   * Extract postal code from location string
-   * Greek postal codes are 5 digits (e.g., 11853, 10431)
-   * Also handles other formats like US, UK, etc.
-   */
-  const extractPostalCode = (location) => {
-    if (!location) return null;
-    
-    // Try to extract postal code patterns:
-    // - 5 digits (Greek format: 11853, 10431) - prioritize this
-    // - 5 digits (US format: 12345)
-    // - 5 digits with dash (US format: 12345-6789)
-    // - Alphanumeric (e.g., UK format: SW1A 1AA)
-    const postalCodePattern = /\b\d{5}(-\d{4})?\b|\b[A-Z0-9]{3,10}\b/i;
-    const match = location.match(postalCodePattern);
-    
-    if (match) {
-      // Return the postal code (remove dash if present, keep only 5 digits for Greek format)
-      const code = match[0].toUpperCase();
-      // If it's a 5-digit code with dash (US format), take only the first 5 digits
-      if (code.match(/^\d{5}-\d{4}$/)) {
-        return code.split('-')[0];
-      }
-      return code;
-    }
-    
-    // If no postal code pattern found, check if the entire string is a 5-digit number (Greek postal code)
-    const allDigits = location.trim().replace(/\s+/g, '');
-    if (/^\d{5}$/.test(allDigits)) {
-      return allDigits;
-    }
-    
-    // If no postal code found, return null
-    // The caller will use the full location string as postal_code
-    return null;
-  };
 
   const handleNextModels = () => {
     setCurrentModelPage((prev) => (prev + 1) % totalModelPages);
@@ -404,18 +359,18 @@ function Home() {
               </div>
               
               <div className="search-input-group">
-                <label>Location</label>
+                <label>City</label>
                 <input 
                   type="text" 
-                  name="location"
-                  value={searchData.location}
+                  name="city"
+                  value={searchData.city}
                   onChange={handleSearchChange}
-                  placeholder="e.g., 39209 or Athens"
+                  placeholder="e.g., Athens, Thessaloniki"
                   className="search-input"
                   required
                 />
                 <small style={{ fontSize: '11px', color: '#666', marginTop: '4px', display: 'block' }}>
-                  Enter postal code (e.g., 39209) or city name
+                  Enter city name
                 </small>
               </div>
               

@@ -24,6 +24,10 @@ function Cars() {
     yearMax: ''
   });
   const [currentUser, setCurrentUser] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalResults, setTotalResults] = useState(0);
+  const ITEMS_PER_PAGE = 10;
 
   // Fetch cars from API or use search results
   useEffect(() => {
@@ -87,8 +91,9 @@ function Cars() {
     }
   }, [location.state]);
 
-  // Apply filters when filters change
+  // Apply filters when filters change (reset to page 1)
   useEffect(() => {
+    setCurrentPage(1);
     applyFilters();
   }, [filters, cars]);
 
@@ -245,6 +250,8 @@ function Cars() {
     }
 
     setFilteredCars(filtered);
+    setTotalResults(filtered.length);
+    setTotalPages(Math.ceil(filtered.length / ITEMS_PER_PAGE));
   };
 
   const handleFilterChange = (e) => {
@@ -267,6 +274,21 @@ function Cars() {
       yearMin: '',
       yearMax: ''
     });
+    setCurrentPage(1);
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    setCurrentPage(newPage);
+    // Scroll to top of page
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Get paginated cars for current page
+  const getPaginatedCars = () => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    return filteredCars.slice(startIndex, endIndex);
   };
 
   const deleteCar = async (carId) => {
@@ -278,8 +300,22 @@ function Cars() {
       await vehiclesAPI.delete(carId);
       
       // Remove from local state
-      setCars(cars.filter(car => car.id !== carId));
-      setFilteredCars(filteredCars.filter(car => car.id !== carId));
+      const updatedCars = cars.filter(car => car.id !== carId);
+      const updatedFilteredCars = filteredCars.filter(car => car.id !== carId);
+      
+      setCars(updatedCars);
+      setFilteredCars(updatedFilteredCars);
+      
+      // Update pagination after deletion
+      const newTotalResults = updatedFilteredCars.length;
+      const newTotalPages = Math.ceil(newTotalResults / ITEMS_PER_PAGE);
+      setTotalResults(newTotalResults);
+      setTotalPages(newTotalPages);
+      
+      // If current page is now beyond total pages, go to last page
+      if (currentPage > newTotalPages && newTotalPages > 0) {
+        setCurrentPage(newTotalPages);
+      }
       
       toast.success('Car deleted successfully!');
     } catch (error) {
@@ -309,7 +345,12 @@ function Cars() {
         {/* Header */}
         <div className="cars-header">
           <h1>All Cars</h1>
-          <p>{filteredCars.length} cars available</p>
+          <p>{totalResults} {totalResults === 1 ? 'car' : 'cars'} available</p>
+          {totalPages > 1 && (
+            <p style={{ color: '#717171', fontSize: '14px' }}>
+              Showing page {currentPage} of {totalPages}
+            </p>
+          )}
         </div>
 
         {/* Filters */}
@@ -447,7 +488,7 @@ function Cars() {
               <p>Try adjusting your filters or check back later for new listings.</p>
             </div>
           ) : (
-            filteredCars.map(car => (
+            getPaginatedCars().map(car => (
               <div key={car.id} className="car-card-wrapper">
                 <CarCard car={car} />
                 {canDeleteCar(car) && (
@@ -463,6 +504,61 @@ function Cars() {
             ))
           )}
         </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && filteredCars.length > 0 && (
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center',
+            gap: '10px',
+            marginTop: '40px',
+            paddingBottom: '40px'
+          }}>
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              style={{
+                padding: '10px 20px',
+                border: '1px solid #ddd',
+                borderRadius: '8px',
+                backgroundColor: currentPage === 1 ? '#f5f5f5' : 'white',
+                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                fontSize: '16px',
+                fontWeight: '500',
+                transition: 'all 0.2s'
+              }}
+            >
+              Previous
+            </button>
+            
+            <span style={{ 
+              fontSize: '16px', 
+              padding: '0 20px',
+              fontWeight: '500',
+              color: '#484848'
+            }}>
+              Page {currentPage} of {totalPages}
+            </span>
+            
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              style={{
+                padding: '10px 20px',
+                border: '1px solid #ddd',
+                borderRadius: '8px',
+                backgroundColor: currentPage === totalPages ? '#f5f5f5' : 'white',
+                cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                fontSize: '16px',
+                fontWeight: '500',
+                transition: 'all 0.2s'
+              }}
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

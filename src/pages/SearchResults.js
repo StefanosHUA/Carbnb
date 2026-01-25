@@ -26,10 +26,10 @@ function SearchResults() {
       // Use search params from navigation state
       setSearchParams(paramsFromState);
       performSearch(paramsFromState);
-    } else if (paramsFromUrl.has('postal_code')) {
-      // Build params from URL query string
+    } else if (paramsFromUrl.has('city')) {
+      // Build params from URL query string (city-based search)
       const params = {
-        postal_code: paramsFromUrl.get('postal_code'),
+        city: paramsFromUrl.get('city'),
         availability_start_date: paramsFromUrl.get('availability_start_date'),
         availability_end_date: paramsFromUrl.get('availability_end_date'),
         query: paramsFromUrl.get('query') || null,
@@ -40,7 +40,6 @@ function SearchResults() {
         min_daily_rate: paramsFromUrl.get('min_daily_rate') ? parseFloat(paramsFromUrl.get('min_daily_rate')) : null,
         max_daily_rate: paramsFromUrl.get('max_daily_rate') ? parseFloat(paramsFromUrl.get('max_daily_rate')) : null,
         min_seats: paramsFromUrl.get('min_seats') ? parseInt(paramsFromUrl.get('min_seats')) : null,
-        city: paramsFromUrl.get('city') || null,
         state: paramsFromUrl.get('state') || null,
         country: paramsFromUrl.get('country') || null,
         page: paramsFromUrl.get('page') ? parseInt(paramsFromUrl.get('page')) : 1,
@@ -163,8 +162,8 @@ function SearchResults() {
     if (searchParams.make || searchParams.model) {
       parts.push(`${searchParams.make || ''} ${searchParams.model || ''}`.trim());
     }
-    if (searchParams.city || searchParams.postal_code) {
-      parts.push(`in ${searchParams.city || searchParams.postal_code}`);
+    if (searchParams.city) {
+      parts.push(`in ${searchParams.city}`);
     }
     if (searchParams.availability_start_date && searchParams.availability_end_date) {
       const startDate = new Date(searchParams.availability_start_date).toLocaleDateString();

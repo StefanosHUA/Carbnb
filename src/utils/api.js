@@ -1,9 +1,16 @@
 /**
  * Centralized API Service for Carbnb Frontend
  * Handles all API communication with the backend microservices
+ * 
+ * Security Features:
+ * - JWT token validation before every request
+ * - Automatic token refresh on expiration
+ * - Request retry with refreshed token
+ * - User activity tracking
  */
 
 import { isUserActive } from './userActivity';
+import { ensureValidToken, isTokenValid } from './tokenManager';
 
 // Microservice URLs
 const USER_SERVICE_URL = process.env.REACT_APP_USER_SERVICE_URL || 'http://localhost:8002';
@@ -217,7 +224,7 @@ const handleResponse = async (response) => {
 };
 
 /**
- * Make API request
+ * Make API request with automatic token validation and refresh
  */
 const apiRequest = async (endpoint, options = {}) => {
   const {
@@ -228,6 +235,28 @@ const apiRequest = async (endpoint, options = {}) => {
     headers: customHeaders = {},
     service = null, // Service name to determine which base URL to use
   } = options;
+
+  // Validate and refresh token before making authenticated requests
+  // Skip for login, register, and other public endpoints
+  const isPublicEndpoint = endpoint.includes('/auth/login') || 
+                           endpoint.includes('/auth/register') || 
+                           endpoint.includes('/auth/google') ||
+                           endpoint.includes('/auth/forgot-password') ||
+                           endpoint.includes('/auth/reset-password') ||
+                           endpoint.includes('/health');
+  
+  if (includeAuth && !isPublicEndpoint) {
+    console.log('[API] Validating token before request...');
+    const tokenValid = await ensureValidToken();
+    
+    if (!tokenValid) {
+      console.error('[API] Token validation failed, request blocked');
+      const error = new Error('Authentication required. Please log in again.');
+      error.status = 401;
+      throw error;
+    }
+    console.log('[API] Token validated successfully');
+  }
 
   // Determine base URL based on service or endpoint
   let baseUrl = API_BASE_URL;
@@ -1149,9 +1178,9 @@ export const salesAPI = {
  */
 export const searchAPI = {
   /**
-   * Search cars using Elasticsearch
+   * Search cars using city-based location
    * GET /api/v1/search/cars
-   * Required: postal_code, availability_start_date, availability_end_date
+   * Required: city, availability_start_date, availability_end_date
    * Optional: query, make, model, category, transmission, fuel_type, min_daily_rate, max_daily_rate, etc.
    */
   searchCars: async (searchParams) => {
@@ -1159,8 +1188,8 @@ export const searchAPI = {
     const queryParams = new URLSearchParams();
     
     // Required parameters
-    if (searchParams.postal_code) {
-      queryParams.append('postal_code', searchParams.postal_code);
+    if (searchParams.city) {
+      queryParams.append('city', searchParams.city);
     }
     if (searchParams.availability_start_date) {
       queryParams.append('availability_start_date', searchParams.availability_start_date);
@@ -1219,7 +1248,9 @@ export const searchAPI = {
     const queryString = queryParams.toString();
     const endpoint = `/api/v1/search/cars${queryString ? `?${queryString}` : ''}`;
     
-    return apiRequest(endpoint, { service: 'search', includeAuth: false });
+    // Changed to includeAuth: true for better security and user tracking
+    // If backend requires anonymous access, change back to false
+    return apiRequest(endpoint, { service: 'search', includeAuth: true });
   },
 };
 
