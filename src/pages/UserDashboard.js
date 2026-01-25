@@ -449,24 +449,24 @@ function UserDashboard() {
                           <h3>{car.name}</h3>
                           <p><i className="fas fa-map-marker-alt"></i> {(() => {
                             if (!car.location) return 'Location not available';
-                          if (typeof car.location === 'string') return car.location;
-                          const loc = car.location;
-                          if (loc.city && loc.state) return `${loc.city}, ${loc.state}`;
-                          if (loc.city) return loc.city;
-                          if (loc.state) return loc.state;
-                          if (loc.name) return loc.name;
-                          if (loc.address) return loc.address;
-                          return 'Location not available';
-                        })()}</p>
-                        <div className="favorite-footer">
-                          <div className="car-rating">
-                            <span className="star">★</span>
-                            <span>{car.rating}</span>
+                            if (typeof car.location === 'string') return car.location;
+                            const loc = car.location;
+                            if (loc.city && loc.state) return `${loc.city}, ${loc.state}`;
+                            if (loc.city) return loc.city;
+                            if (loc.state) return loc.state;
+                            if (loc.name) return loc.name;
+                            if (loc.address) return loc.address;
+                            return 'Location not available';
+                          })()}</p>
+                          <div className="favorite-footer">
+                            <div className="car-rating">
+                              <span className="star">★</span>
+                              <span>{car.rating}</span>
+                            </div>
+                            <span className="car-price">${car.price}/day</span>
                           </div>
-                          <span className="car-price">${car.price}/day</span>
                         </div>
-                      </div>
-                    </Link>
+                      </Link>
                     );
                   })}
                 </div>
