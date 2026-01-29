@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useToastContext } from '../context/ToastContext';
 import { vehiclesAPI } from '../utils/api';
-import SecureFileUpload from './SecureFileUpload';
 import { getUserData } from '../utils/api';
+import './VehicleDocuments.css';
 
 function VehicleDocuments() {
   const toast = useToastContext();
   const [vehicles, setVehicles] = useState([]);
-  const [vehicleDocuments, setVehicleDocuments] = useState({}); // vehicleId -> documents array
+  const [vehicleDocuments, setVehicleDocuments] = useState({});
   const [isLoading, setIsLoading] = useState(true);
-  const [uploading, setUploading] = useState({}); // vehicleId -> boolean
-  const [selectedVehicle, setSelectedVehicle] = useState(null);
-  const [selectedDocType, setSelectedDocType] = useState('license');
+  const [uploading, setUploading] = useState({});
 
   useEffect(() => {
     fetchVehicles();
@@ -22,13 +20,13 @@ function VehicleDocuments() {
       setIsLoading(true);
       const userData = getUserData();
       if (!userData) {
-        toast.error('User information not found');
+        setIsLoading(false);
         return;
       }
       
       const userId = userData.id || userData.user_id || userData.userId;
       if (!userId) {
-        toast.error('User ID not found');
+        setIsLoading(false);
         return;
       }
       
@@ -37,36 +35,51 @@ function VehicleDocuments() {
         ? vehiclesData 
         : (vehiclesData?.vehicles || vehiclesData?.data || []);
       
-      // Filter to only show inactive cars (cars that need documents)
-      const inactiveVehicles = vehiclesList.filter(vehicle => !vehicle.is_active);
-      setVehicles(inactiveVehicles);
+      setVehicles(vehiclesList);
       
-      // Fetch documents for each inactive vehicle
-      const documentsMap = {};
-      for (const vehicle of inactiveVehicles) {
-        try {
-          const docs = await vehiclesAPI.getDocuments(vehicle.id);
-          documentsMap[vehicle.id] = Array.isArray(docs) ? docs : (docs?.documents || []);
-        } catch (error) {
-          console.error(`Error fetching documents for vehicle ${vehicle.id}:`, error);
-          documentsMap[vehicle.id] = [];
+      if (vehiclesList.length > 0) {
+        const documentsMap = {};
+        for (const vehicle of vehiclesList) {
+          try {
+            const docs = await vehiclesAPI.getDocuments(vehicle.id);
+            documentsMap[vehicle.id] = Array.isArray(docs) ? docs : (docs?.documents || []);
+          } catch (error) {
+            console.error(`Error fetching documents for vehicle ${vehicle.id}:`, error);
+            documentsMap[vehicle.id] = [];
+          }
         }
+        setVehicleDocuments(documentsMap);
       }
-      setVehicleDocuments(documentsMap);
     } catch (error) {
       console.error('Error fetching vehicles:', error);
-      toast.error('Failed to load vehicles');
+      setVehicles([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleUpload = async (file, vehicleId, docType) => {
+  const handleFileChange = async (e, vehicleId, docType) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file
+    const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    if (!validTypes.includes(file.type)) {
+      toast.error('Please upload PDF, JPEG, or PNG files only');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File size must be less than 10MB');
+      return;
+    }
+
     try {
-      setUploading(prev => ({ ...prev, [vehicleId]: true }));
+      setUploading(prev => ({ ...prev, [`${vehicleId}-${docType}`]: true }));
       await vehiclesAPI.uploadDocument(vehicleId, file, docType);
-      toast.success('Document uploaded successfully!');
-      // Refresh documents for this vehicle
+      toast.success(`${docType === 'license' ? 'License' : 'Insurance'} uploaded successfully!`);
+      
+      // Refresh documents
       const docs = await vehiclesAPI.getDocuments(vehicleId);
       setVehicleDocuments(prev => ({
         ...prev,
@@ -75,22 +88,21 @@ function VehicleDocuments() {
     } catch (error) {
       console.error('Document upload error:', error);
       toast.error(error.message || 'Failed to upload document');
-      throw error;
     } finally {
-      setUploading(prev => ({ ...prev, [vehicleId]: false }));
-      setSelectedVehicle(null);
+      setUploading(prev => ({ ...prev, [`${vehicleId}-${docType}`]: false }));
+      e.target.value = '';
     }
   };
 
   const handleDelete = async (docId, vehicleId) => {
-    if (!window.confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+    if (!window.confirm('Are you sure you want to delete this document?')) {
       return;
     }
 
     try {
       await vehiclesAPI.deleteDocument(docId);
       toast.success('Document deleted successfully');
-      // Refresh documents
+      
       const docs = await vehiclesAPI.getDocuments(vehicleId);
       setVehicleDocuments(prev => ({
         ...prev,
@@ -102,35 +114,16 @@ function VehicleDocuments() {
     }
   };
 
-  const handleDownload = async (doc) => {
-    try {
-      // Documents should have doc_url field directly
-      if (doc.doc_url) {
-        window.open(doc.doc_url, '_blank');
-      } else {
-        toast.error('Document URL not available');
-      }
-    } catch (error) {
-      console.error('Document download error:', error);
-      toast.error(error.message || 'Failed to download document');
+  const handleView = (doc) => {
+    if (doc.doc_url) {
+      window.open(doc.doc_url, '_blank');
+    } else {
+      toast.error('Document URL not available');
     }
-  };
-
-  const getDocTypeLabel = (type) => {
-    const labels = {
-      'license': 'Vehicle License',
-      'insurance': 'Insurance',
-    };
-    return labels[type] || type;
   };
 
   const getVehicleName = (vehicle) => {
     return vehicle.name || `${vehicle.make || ''} ${vehicle.model || ''}`.trim() || `Vehicle #${vehicle.id}`;
-  };
-
-  const hasDocument = (vehicleId, docType) => {
-    const docs = vehicleDocuments[vehicleId] || [];
-    return docs.some(doc => doc.doc_type === docType);
   };
 
   const getDocument = (vehicleId, docType) => {
@@ -140,8 +133,11 @@ function VehicleDocuments() {
 
   if (isLoading) {
     return (
-      <div className="vehicle-documents">
-        <h2>Car Documents</h2>
+      <div className="vehicle-documents-modern">
+        <div className="documents-header">
+          <h2><i className="fas fa-file-alt"></i> Vehicle Documents</h2>
+          <p className="header-subtitle">Manage your vehicle documentation</p>
+        </div>
         <div className="loading-container">
           <div className="loading-spinner"></div>
           <p>Loading vehicles...</p>
@@ -152,15 +148,15 @@ function VehicleDocuments() {
 
   if (vehicles.length === 0) {
     return (
-      <div className="vehicle-documents">
-        <h2>Car Documents</h2>
-        <p className="section-description">
-          Upload vehicle license and insurance documents to activate your cars for rental.
-          <br />
-          <strong>Accepted file types:</strong> PDF, JPEG (Maximum size: 10MB)
-        </p>
-        <div className="empty-state">
-          <i className="fas fa-car"></i>
+      <div className="vehicle-documents-modern">
+        <div className="documents-header">
+          <h2><i className="fas fa-file-alt"></i> Vehicle Documents</h2>
+          <p className="header-subtitle">Upload vehicle license and insurance documents to activate your cars</p>
+        </div>
+        <div className="empty-state-modern">
+          <div className="empty-icon">
+            <i className="fas fa-car"></i>
+          </div>
           <h3>No vehicles registered</h3>
           <p>Register a vehicle first to upload documents</p>
         </div>
@@ -169,66 +165,89 @@ function VehicleDocuments() {
   }
 
   return (
-    <div className="vehicle-documents">
-      <h2>Car Documents</h2>
-      <p className="section-description">
-        Upload vehicle license and insurance documents for each car. Documents must be verified by admin before your car can be activated.
-        <br />
-        <strong>Accepted file types:</strong> PDF, JPEG, PNG (Maximum size: 10MB)
-      </p>
+    <div className="vehicle-documents-modern">
+      <div className="documents-header">
+        <h2><i className="fas fa-file-alt"></i> Vehicle Documents</h2>
+        <p className="header-subtitle">
+          Upload vehicle license and insurance documents. Both must be verified by admin for activation.
+        </p>
+        <div className="file-requirements">
+          <i className="fas fa-check-circle"></i>
+          <span>PDF, JPEG, PNG</span>
+          <span className="divider">•</span>
+          <span>Max 10MB</span>
+        </div>
+      </div>
 
-      <div className="vehicles-documents-list">
+      <div className="vehicles-grid-modern">
         {vehicles.map(vehicle => {
-          const docs = vehicleDocuments[vehicle.id] || [];
           const licenseDoc = getDocument(vehicle.id, 'license');
           const insuranceDoc = getDocument(vehicle.id, 'insurance');
-          const isUploading = uploading[vehicle.id];
+          const licenseUploading = uploading[`${vehicle.id}-license`];
+          const insuranceUploading = uploading[`${vehicle.id}-insurance`];
 
           return (
-            <div key={vehicle.id} className="vehicle-document-section">
-              <div className="vehicle-header">
-                <h3>{getVehicleName(vehicle)}</h3>
-                <span className={`vehicle-status ${vehicle.is_active ? 'active' : 'inactive'}`}>
-                  {vehicle.is_active ? 'Active' : 'Inactive'}
-                </span>
+            <div key={vehicle.id} className="vehicle-card-modern">
+              <div className="vehicle-card-header">
+                <div className="vehicle-info">
+                  <h3>{getVehicleName(vehicle)}</h3>
+                  <div className="vehicle-meta">
+                    <span className={`status-badge ${vehicle.is_active ? 'status-active' : 'status-inactive'}`}>
+                      <i className={`fas fa-${vehicle.is_active ? 'check-circle' : 'clock'}`}></i>
+                      {vehicle.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <div className="documents-grid">
+              <div className="documents-row">
                 {/* License Document */}
-                <div className="document-card">
-                  <div className="document-header">
-                    <h4>
-                      <i className="fas fa-id-card"></i> Vehicle License
-                      {hasDocument(vehicle.id, 'license') && licenseDoc?.is_verified && (
-                        <span className="verified-badge">
+                <div className="doc-card">
+                  <div className="doc-card-header">
+                    <div className="doc-icon license-icon">
+                      <i className="fas fa-id-card"></i>
+                    </div>
+                    <div className="doc-title">
+                      <h4>Vehicle License</h4>
+                      {licenseDoc?.is_verified && (
+                        <span className="badge-verified">
                           <i className="fas fa-check-circle"></i> Verified
                         </span>
                       )}
-                      {hasDocument(vehicle.id, 'license') && !licenseDoc?.is_verified && (
-                        <span className="pending-badge">
+                      {licenseDoc && !licenseDoc.is_verified && (
+                        <span className="badge-pending">
                           <i className="fas fa-clock"></i> Pending
                         </span>
                       )}
-                    </h4>
+                    </div>
                   </div>
-                  
-                  {hasDocument(vehicle.id, 'license') ? (
-                    <div className="document-info">
-                      <p>{licenseDoc.file_name}</p>
-                      {licenseDoc.uploaded_at && (
-                        <p className="document-meta">
-                          Uploaded {new Date(licenseDoc.uploaded_at).toLocaleDateString()}
-                        </p>
-                      )}
-                      <div className="document-actions">
+
+                  {licenseDoc ? (
+                    <div className="doc-uploaded">
+                      <div className="file-info-box">
+                        <i className="fas fa-file-pdf"></i>
+                        <div className="file-details">
+                          <p className="file-name">{licenseDoc.file_name}</p>
+                          <p className="file-date">
+                            {new Date(licenseDoc.uploaded_at).toLocaleDateString('en-US', { 
+                              month: 'short', 
+                              day: 'numeric', 
+                              year: 'numeric' 
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="doc-actions">
                         <button 
-                          className="action-btn view"
-                          onClick={() => handleDownload(licenseDoc)}
+                          type="button"
+                          className="btn-action btn-view"
+                          onClick={() => handleView(licenseDoc)}
                         >
-                          <i className="fas fa-download"></i> View
+                          <i className="fas fa-eye"></i> View
                         </button>
                         <button 
-                          className="action-btn delete"
+                          type="button"
+                          className="btn-action btn-delete"
                           onClick={() => handleDelete(licenseDoc.id, vehicle.id)}
                         >
                           <i className="fas fa-trash"></i> Delete
@@ -236,72 +255,80 @@ function VehicleDocuments() {
                       </div>
                     </div>
                   ) : (
-                    <div className="document-upload">
-                      {selectedVehicle === vehicle.id && selectedDocType === 'license' ? (
-                        <div>
-                          <SecureFileUpload
-                            onFileSelect={(file) => handleUpload(file, vehicle.id, 'license')}
-                            acceptedTypes={['application/pdf', 'image/jpeg']}
-                            maxSize={10 * 1024 * 1024}
-                          />
-                          <button
-                            className="cancel-upload-btn"
-                            onClick={() => setSelectedVehicle(null)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          className="upload-doc-btn"
-                          onClick={() => {
-                            setSelectedVehicle(vehicle.id);
-                            setSelectedDocType('license');
-                          }}
-                          disabled={isUploading}
-                        >
-                          <i className="fas fa-upload"></i> Upload License
-                        </button>
-                      )}
+                    <div className="doc-upload-zone">
+                      <input
+                        type="file"
+                        id={`license-${vehicle.id}`}
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => handleFileChange(e, vehicle.id, 'license')}
+                        disabled={licenseUploading}
+                        style={{ display: 'none' }}
+                      />
+                      <label htmlFor={`license-${vehicle.id}`} className="upload-label">
+                        {licenseUploading ? (
+                          <div className="upload-progress">
+                            <div className="spinner-upload"></div>
+                            <p>Uploading...</p>
+                          </div>
+                        ) : (
+                          <>
+                            <i className="fas fa-cloud-upload-alt upload-icon"></i>
+                            <p className="upload-text">Click to upload</p>
+                            <p className="upload-hint">PDF, JPEG, PNG (Max 10MB)</p>
+                          </>
+                        )}
+                      </label>
                     </div>
                   )}
                 </div>
 
                 {/* Insurance Document */}
-                <div className="document-card">
-                  <div className="document-header">
-                    <h4>
-                      <i className="fas fa-shield-alt"></i> Insurance
-                      {hasDocument(vehicle.id, 'insurance') && insuranceDoc?.is_verified && (
-                        <span className="verified-badge">
+                <div className="doc-card">
+                  <div className="doc-card-header">
+                    <div className="doc-icon insurance-icon">
+                      <i className="fas fa-shield-alt"></i>
+                    </div>
+                    <div className="doc-title">
+                      <h4>Insurance</h4>
+                      {insuranceDoc?.is_verified && (
+                        <span className="badge-verified">
                           <i className="fas fa-check-circle"></i> Verified
                         </span>
                       )}
-                      {hasDocument(vehicle.id, 'insurance') && !insuranceDoc?.is_verified && (
-                        <span className="pending-badge">
+                      {insuranceDoc && !insuranceDoc.is_verified && (
+                        <span className="badge-pending">
                           <i className="fas fa-clock"></i> Pending
                         </span>
                       )}
-                    </h4>
+                    </div>
                   </div>
-                  
-                  {hasDocument(vehicle.id, 'insurance') ? (
-                    <div className="document-info">
-                      <p>{insuranceDoc.file_name}</p>
-                      {insuranceDoc.uploaded_at && (
-                        <p className="document-meta">
-                          Uploaded {new Date(insuranceDoc.uploaded_at).toLocaleDateString()}
-                        </p>
-                      )}
-                      <div className="document-actions">
+
+                  {insuranceDoc ? (
+                    <div className="doc-uploaded">
+                      <div className="file-info-box">
+                        <i className="fas fa-file-pdf"></i>
+                        <div className="file-details">
+                          <p className="file-name">{insuranceDoc.file_name}</p>
+                          <p className="file-date">
+                            {new Date(insuranceDoc.uploaded_at).toLocaleDateString('en-US', { 
+                              month: 'short', 
+                              day: 'numeric', 
+                              year: 'numeric' 
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="doc-actions">
                         <button 
-                          className="action-btn view"
-                          onClick={() => handleDownload(insuranceDoc)}
+                          type="button"
+                          className="btn-action btn-view"
+                          onClick={() => handleView(insuranceDoc)}
                         >
-                          <i className="fas fa-download"></i> View
+                          <i className="fas fa-eye"></i> View
                         </button>
                         <button 
-                          className="action-btn delete"
+                          type="button"
+                          className="btn-action btn-delete"
                           onClick={() => handleDelete(insuranceDoc.id, vehicle.id)}
                         >
                           <i className="fas fa-trash"></i> Delete
@@ -309,44 +336,40 @@ function VehicleDocuments() {
                       </div>
                     </div>
                   ) : (
-                    <div className="document-upload">
-                      {selectedVehicle === vehicle.id && selectedDocType === 'insurance' ? (
-                        <div>
-                          <SecureFileUpload
-                            onFileSelect={(file) => handleUpload(file, vehicle.id, 'insurance')}
-                            acceptedTypes={['application/pdf', 'image/jpeg']}
-                            maxSize={10 * 1024 * 1024}
-                          />
-                          <button
-                            className="cancel-upload-btn"
-                            onClick={() => setSelectedVehicle(null)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          className="upload-doc-btn"
-                          onClick={() => {
-                            setSelectedVehicle(vehicle.id);
-                            setSelectedDocType('insurance');
-                          }}
-                          disabled={isUploading}
-                        >
-                          <i className="fas fa-upload"></i> Upload Insurance
-                        </button>
-                      )}
+                    <div className="doc-upload-zone">
+                      <input
+                        type="file"
+                        id={`insurance-${vehicle.id}`}
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => handleFileChange(e, vehicle.id, 'insurance')}
+                        disabled={insuranceUploading}
+                        style={{ display: 'none' }}
+                      />
+                      <label htmlFor={`insurance-${vehicle.id}`} className="upload-label">
+                        {insuranceUploading ? (
+                          <div className="upload-progress">
+                            <div className="spinner-upload"></div>
+                            <p>Uploading...</p>
+                          </div>
+                        ) : (
+                          <>
+                            <i className="fas fa-cloud-upload-alt upload-icon"></i>
+                            <p className="upload-text">Click to upload</p>
+                            <p className="upload-hint">PDF, JPEG, PNG (Max 10MB)</p>
+                          </>
+                        )}
+                      </label>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="vehicle-requirements">
-                <p className="requirements-note">
+              {!vehicle.is_active && (
+                <div className="requirements-notice">
                   <i className="fas fa-info-circle"></i>
-                  Both license and insurance must be verified by admin for this vehicle to be activated.
-                </p>
-              </div>
+                  <span>Both license and insurance must be uploaded and verified by admin for activation</span>
+                </div>
+              )}
             </div>
           );
         })}
@@ -356,4 +379,3 @@ function VehicleDocuments() {
 }
 
 export default VehicleDocuments;
-

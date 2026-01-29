@@ -121,7 +121,12 @@ function Admin() {
     setLoadingDashboard(true);
     try {
       // Load user stats
-      const userStats = await usersAPI.getStats();
+      let userStats = null;
+      try {
+        userStats = await usersAPI.getStats();
+      } catch (error) {
+        console.error('Error loading user stats:', error);
+      }
       
       // Load vehicles count - backend max limit is 1000, so we need to paginate if needed
       let allVehicles = [];
@@ -129,35 +134,45 @@ function Admin() {
       const limit = 1000; // Backend maximum
       let hasMore = true;
       
-      // Fetch all vehicles in batches
-      while (hasMore) {
-        const vehiclesData = await vehiclesAPI.getAll({ skip, limit });
-        
-        if (Array.isArray(vehiclesData)) {
-          allVehicles = allVehicles.concat(vehiclesData);
-          hasMore = vehiclesData.length === limit; // If we got a full page, there might be more
-          skip += limit;
-        } else if (vehiclesData?.items) {
-          allVehicles = allVehicles.concat(vehiclesData.items);
-          hasMore = vehiclesData.items.length === limit;
-          skip += limit;
-        } else {
-          hasMore = false;
+      try {
+        // Fetch all vehicles in batches
+        while (hasMore) {
+          const vehiclesData = await vehiclesAPI.getAll({ skip, limit });
+          
+          if (Array.isArray(vehiclesData)) {
+            allVehicles = allVehicles.concat(vehiclesData);
+            hasMore = vehiclesData.length === limit; // If we got a full page, there might be more
+            skip += limit;
+          } else if (vehiclesData?.items) {
+            allVehicles = allVehicles.concat(vehiclesData.items);
+            hasMore = vehiclesData.items.length === limit;
+            skip += limit;
+          } else {
+            hasMore = false;
+          }
+          
+          // Safety check to prevent infinite loops
+          if (skip > 10000) {
+            console.warn('Safety limit reached while fetching vehicles');
+            break;
+          }
         }
-        
-        // Safety check to prevent infinite loops
-        if (skip > 10000) {
-          console.warn('Safety limit reached while fetching vehicles');
-          break;
-        }
+      } catch (error) {
+        console.error('Error loading vehicles:', error);
       }
       
       const totalCars = allVehicles.length;
       const activeCars = allVehicles.filter(v => v.is_active).length;
       
-      // Load bookings count
-      const bookingsData = await bookingsAPI.getAll({ page_size: 1 });
-      const totalBookings = bookingsData?.total || bookingsData?.items?.length || bookingsData?.length || 0;
+      // Load bookings count - handle gracefully if service is unavailable
+      let totalBookings = 0;
+      try {
+        const bookingsData = await bookingsAPI.getAll({ page_size: 1 });
+        totalBookings = bookingsData?.total || bookingsData?.items?.length || bookingsData?.length || 0;
+      } catch (error) {
+        console.warn('Bookings service unavailable:', error);
+        // Don't show error toast, just leave bookings at 0
+      }
       
       setDashboardStats({
         totalUsers: userStats?.total_users || 0,
@@ -218,8 +233,12 @@ function Admin() {
       
       console.log('[Admin] Loading cars with filters:', filters);
       const response = await vehiclesAPI.getAll(filters);
+      console.log('[Admin] Raw vehicles response:', response);
+      console.log('[Admin] Response type:', typeof response);
+      console.log('[Admin] Is array:', Array.isArray(response));
       
       if (Array.isArray(response)) {
+        console.log('[Admin] Processing as array, count:', response.length);
         setCars(response);
         // If no total is provided, estimate based on whether we got a full page
         if (response.length < carsPerPage) {
@@ -229,12 +248,15 @@ function Admin() {
           setCarsTotal(carsPage * carsPerPage + 1);
         }
       } else if (response?.items) {
+        console.log('[Admin] Processing as items object, count:', response.items.length);
         setCars(response.items);
         setCarsTotal(response.total || response.items.length);
       } else if (response?.total !== undefined) {
+        console.log('[Admin] Processing as data object with total');
         setCars(response.data || []);
         setCarsTotal(response.total);
       } else {
+        console.log('[Admin] No valid data format found, setting empty');
         setCars([]);
         setCarsTotal(0);
       }
@@ -252,18 +274,27 @@ function Admin() {
     setLoadingBookings(true);
     try {
       const response = await bookingsAPI.getAll({ page_size: 100 });
+      console.log('[Admin] Bookings response:', response);
+      
       if (Array.isArray(response)) {
         setBookings(response);
       } else if (response?.bookings) {
         setBookings(response.bookings);
       } else if (response?.items) {
         setBookings(response.items);
+      } else if (response?.data) {
+        setBookings(response.data);
       } else {
         setBookings([]);
       }
     } catch (error) {
       console.error('Error loading bookings:', error);
-      toast.error('Failed to load bookings');
+      // Check if it's a 503 or service unavailable error
+      if (error.status === 503 || error.message?.includes('503')) {
+        toast.error('Bookings service is temporarily unavailable');
+      } else {
+        toast.error('Failed to load bookings: ' + (error.message || 'Unknown error'));
+      }
       setBookings([]);
     } finally {
       setLoadingBookings(false);
@@ -324,40 +355,42 @@ function Admin() {
   };
 
   const handleEditCar = (car) => {
+    console.log('[Admin] Editing car:', car);
+    console.log('[Admin] Car data - make:', car.make, 'model:', car.model, 'year:', car.year);
     setEditingCar(car);
-    // Populate form with car data
-    setVehicleForm({
-      make: car.make || '',
-      model: car.model || '',
-      year: car.year || new Date().getFullYear(),
-      color: car.color || '',
-      license_plate: car.license_plate || '',
-      vin: car.vin || '',
+    // Populate form with car data - convert all to strings for input fields
+    const formData = {
+      make: car.make ? String(car.make) : '',
+      model: car.model ? String(car.model) : '',
+      year: car.year ? String(car.year) : String(new Date().getFullYear()),
+      color: car.color ? String(car.color) : '',
+      license_plate: car.license_plate ? String(car.license_plate) : '',
+      vin: car.vin ? String(car.vin) : '',
       transmission: car.transmission || 'automatic',
       fuel_type: car.fuel_type || 'gasoline',
       category: car.category || 'economy',
-      seats: car.seats || 5,
-      doors: car.doors || 4,
-      mileage: car.mileage || 0,
-      daily_rate: car.daily_rate || 0,
-      deposit_amount: car.deposit_amount || 0,
-      engine_size: car.engine_size || '',
-      horsepower: car.horsepower || '',
-      weekly_rate: car.weekly_rate || '',
-      monthly_rate: car.monthly_rate || '',
-      features: car.features || '',
-      description: car.description || '',
-      condition_notes: car.condition_notes || '',
+      seats: car.seats ? String(car.seats) : '5',
+      doors: car.doors ? String(car.doors) : '4',
+      mileage: car.mileage !== undefined ? String(car.mileage) : '0',
+      daily_rate: car.daily_rate !== undefined ? String(car.daily_rate) : '0',
+      deposit_amount: car.deposit_amount !== undefined ? String(car.deposit_amount) : '0',
+      engine_size: car.engine_size ? String(car.engine_size) : '',
+      horsepower: car.horsepower ? String(car.horsepower) : '',
+      weekly_rate: car.weekly_rate ? String(car.weekly_rate) : '',
+      monthly_rate: car.monthly_rate ? String(car.monthly_rate) : '',
+      features: car.features ? String(car.features) : '',
+      description: car.description ? String(car.description) : '',
+      condition_notes: car.condition_notes ? String(car.condition_notes) : '',
       last_service_date: car.last_service_date ? car.last_service_date.split('T')[0] : '',
       location: car.location ? {
-        name: car.location.name || '',
-        address: car.location.address || '',
-        city: car.location.city || '',
-        state: car.location.state || '',
-        country: car.location.country || '',
-        postal_code: car.location.postal_code || '',
-        latitude: car.location.latitude || '',
-        longitude: car.location.longitude || ''
+        name: car.location.name ? String(car.location.name) : '',
+        address: car.location.address ? String(car.location.address) : '',
+        city: car.location.city ? String(car.location.city) : '',
+        state: car.location.state ? String(car.location.state) : '',
+        country: car.location.country ? String(car.location.country) : '',
+        postal_code: car.location.postal_code ? String(car.location.postal_code) : '',
+        latitude: car.location.latitude ? String(car.location.latitude) : '',
+        longitude: car.location.longitude ? String(car.location.longitude) : ''
       } : {
         name: '',
         address: '',
@@ -368,7 +401,9 @@ function Admin() {
         latitude: '',
         longitude: ''
       }
-    });
+    };
+    console.log('[Admin] Setting vehicle form with data:', formData);
+    setVehicleForm(formData);
     setShowCreateCarForm(true);
   };
 

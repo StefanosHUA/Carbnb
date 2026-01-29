@@ -37,10 +37,20 @@ function OwnerDashboard() {
 
   // Refresh listings when returning to this page
   useEffect(() => {
+    let lastFetch = 0;
+    const FETCH_COOLDOWN = 5000; // 5 seconds cooldown between fetches
+    
     const handleFocus = () => {
+      const now = Date.now();
+      if (now - lastFetch < FETCH_COOLDOWN) {
+        console.log('Skipping fetch - cooldown period');
+        return;
+      }
+      
       // Refresh listings when window regains focus (user returns from another page)
       const savedUser = localStorage.getItem('carbnb_user');
       if (savedUser && user) {
+        lastFetch = now;
         const userData = JSON.parse(savedUser);
         fetchOwnerData(userData);
       }
@@ -90,16 +100,20 @@ function OwnerDashboard() {
       console.log('Number of listings:', listings.length);
       setListings(listings);
       
-      // Fetch sales separately - don't let sales errors affect listings display
+      // Skip sales fetch for now - endpoint not implemented yet
+      setSales([]);
+      
+      // TODO: Re-enable when sales/earnings endpoint is implemented
+      /*
       try {
         const salesData = await salesAPI.getByOwner(userId);
         const sales = Array.isArray(salesData) ? salesData : (salesData.data || salesData.sales || []);
         setSales(sales);
       } catch (salesError) {
-        // Sales API errors (like 404) shouldn't prevent listings from showing
         console.log('Sales API error (non-critical):', salesError);
         setSales([]);
       }
+      */
     } catch (error) {
       console.error('Error fetching owner data:', error);
       console.error('Error details:', {
@@ -121,12 +135,18 @@ function OwnerDashboard() {
         toast.error(error.message || 'Failed to load dashboard data.');
         setListings([]);
         setSales([]);
-      } else if (error.status === 0) {
-        toast.error('Cannot connect to backend services. Please ensure the backend is running.');
+      } else if (error.status === 0 || error.status === 503 || error.message?.includes('Service unavailable')) {
+        // Service unavailable - don't show repeated errors, just set empty state
+        console.warn('Backend service unavailable. Setting empty state.');
         setListings([]);
         setSales([]);
       } else {
-        toast.error('Failed to load dashboard data.');
+        // Only show error toast once per session to prevent spam
+        const errorShown = sessionStorage.getItem('dashboard_error_shown');
+        if (!errorShown) {
+          toast.error('Failed to load dashboard data.');
+          sessionStorage.setItem('dashboard_error_shown', 'true');
+        }
         setListings([]);
         setSales([]);
       }
@@ -212,6 +232,7 @@ function OwnerDashboard() {
             My Listings
             {listings.length > 0 && <span className="badge">{listings.length}</span>}
           </button>
+          {/* Earnings tab temporarily disabled - endpoint not implemented yet
           <button
             className={`tab-btn ${activeTab === 'earnings' ? 'active' : ''}`}
             onClick={() => setActiveTab('earnings')}
@@ -219,6 +240,7 @@ function OwnerDashboard() {
             <i className="fas fa-wallet"></i>
             Earnings
           </button>
+          */}
           <button
             className={`tab-btn ${activeTab === 'documents' ? 'active' : ''}`}
             onClick={() => setActiveTab('documents')}
@@ -330,6 +352,7 @@ function OwnerDashboard() {
             </div>
           )}
 
+          {/* Earnings tab temporarily disabled - endpoint not implemented yet
           {activeTab === 'earnings' && (
             <div className="earnings-tab">
               <div className="earnings-overview">
@@ -358,6 +381,7 @@ function OwnerDashboard() {
               </div>
             </div>
           )}
+          */}
 
           {activeTab === 'documents' && (
             <div className="documents-tab">

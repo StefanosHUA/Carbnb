@@ -13,10 +13,10 @@ import { isUserActive } from './userActivity';
 import { ensureValidToken, isTokenValid } from './tokenManager';
 
 // Microservice URLs
-const USER_SERVICE_URL = process.env.REACT_APP_USER_SERVICE_URL || 'http://localhost:8002';
-const VEHICLE_SERVICE_URL = process.env.REACT_APP_VEHICLE_SERVICE_URL || 'http://localhost:3003';
-const BOOKING_SERVICE_URL = process.env.REACT_APP_BOOKING_SERVICE_URL || 'http://localhost:8003';
-const SEARCH_SERVICE_URL = process.env.REACT_APP_SEARCH_SERVICE_URL || 'http://localhost:8004';
+const USER_SERVICE_URL = process.env.REACT_APP_USER_SERVICE_URL || 'http://localhost:8000/user';
+const VEHICLE_SERVICE_URL = process.env.REACT_APP_VEHICLE_SERVICE_URL || 'http://localhost:8000/car';
+const BOOKING_SERVICE_URL = process.env.REACT_APP_BOOKING_SERVICE_URL || 'http://localhost:8000/book';
+const SEARCH_SERVICE_URL = process.env.REACT_APP_SEARCH_SERVICE_URL || 'http://localhost:8000/search';
 const API_BASE_URL = process.env.REACT_APP_API_URL || USER_SERVICE_URL;
 
 /**

@@ -222,7 +222,7 @@ textarea.error {
 }
 
 .google-signin-btn:hover:not(:disabled) {
-  background: #3367d6;
+  background: #1d4ed8;
 }
 
 .google-signin-btn.loading {
@@ -423,9 +423,9 @@ body, #root {
 
 .header-home .login-btn:hover,
 .header-home .signup-btn:hover {
-  background: #e3f2fd !important;
-  color: #1976d2 !important;
-  border-color: #1976d2 !important;
+  background: #eff6ff !important;
+  color: #2563eb !important;
+  border-color: #2563eb !important;
   box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2) !important;
 }
 
@@ -438,8 +438,8 @@ body, #root {
 
 .header-other .login-btn:hover, 
 .header-other .signup-btn:hover {
-  background: #e3f2fd !important;
-  color: #1976d2 !important;
+  background: #eff6ff !important;
+  color: #2563eb !important;
   border-radius: 8px !important;
 }
 
@@ -737,7 +737,7 @@ body, #root {
 }
 
 .view-more-link:hover {
-  color: #0066cc;
+  color: #2563eb;
 }
 
 .models-container-wrapper {
@@ -795,7 +795,7 @@ body, #root {
 }
 
 .model-info-bar {
-  background: #0066cc;
+  background: #2563eb;
   padding: 14px 16px;
   text-align: center;
 }
@@ -2081,19 +2081,19 @@ body, #root {
 }
 
 .info-message {
-  background: #e3f2fd;
-  border: 1px solid #90caf9;
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
   border-radius: 8px;
   padding: 16px;
   margin: 16px 0;
-  color: #1565c0;
+  color: #1e40af;
   font-size: 14px;
   line-height: 1.5;
 }
 
 .info-message i {
   margin-right: 8px;
-  color: #1976d2;
+  color: #2563eb;
 }
 
 .car-form .error-text {
@@ -3593,7 +3593,7 @@ body, #root {
 
 .booking-price-section {
   padding: 24px 24px 20px;
-  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  background: #f8fafc;
   border-bottom: 1px solid #e5e7eb;
 }
 
@@ -3729,7 +3729,7 @@ body, #root {
 
 .book-btn-new {
   width: calc(100% - 48px);
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  background: #2563eb;
   color: white;
   border: none;
   padding: 16px 24px;
@@ -3748,7 +3748,7 @@ body, #root {
 }
 
 .book-btn-new:hover {
-  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  background: #1d4ed8;
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
 }
@@ -3787,7 +3787,7 @@ body, #root {
 
 .unavailable-btn-new {
   width: 100%;
-  background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+  background: #f5f5f5;
   color: #666666;
   border: 2px solid #d0d0d0;
   padding: 16px 24px;
@@ -3814,7 +3814,7 @@ body, #root {
 }
 
 .unavailable-btn-new:hover {
-  background: linear-gradient(135deg, #f0f0f0 0%, #e0e0e0 100%);
+  background: #e8e8e8;
   transform: none;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
@@ -4593,7 +4593,7 @@ body, #root {
 
 .dashboard-tabs {
   display: flex;
-  gap: 8px;
+  gap: 0;
   margin-bottom: 32px;
   border-bottom: 2px solid #ebebeb;
 }
@@ -4601,7 +4601,8 @@ body, #root {
 .tab-btn {
   background: none;
   border: none;
-  padding: 12px 20px;
+  border-right: 1px solid #e0e0e0;
+  padding: 12px 24px;
   font-size: 14px;
   font-weight: 500;
   color: #717171;
@@ -4616,13 +4617,19 @@ body, #root {
   position: relative;
 }
 
+.tab-btn:last-child {
+  border-right: none;
+}
+
 .tab-btn:hover {
   color: #222222;
+  background: #f9f9f9;
 }
 
 .tab-btn.active {
   color: #2563eb;
   border-bottom-color: #2563eb;
+  background: #f8f9fa;
 }
 
 .tab-btn .badge {
@@ -6040,12 +6047,12 @@ body, #root {
 }
 
 .document-actions .action-btn.view {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: #eff6ff;
+  color: #2563eb;
 }
 
 .document-actions .action-btn.view:hover {
-  background: #bbdefb;
+  background: #dbeafe;
 }
 
 .document-actions .action-btn.delete {
@@ -6190,12 +6197,12 @@ body, #root {
 }
 
 .availability-actions .action-btn.edit {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: #eff6ff;
+  color: #2563eb;
 }
 
 .availability-actions .action-btn.edit:hover {
-  background: #bbdefb;
+  background: #dbeafe;
 }
 
 .availability-actions .action-btn.delete {
@@ -6541,8 +6548,8 @@ body, #root {
 
 /* Owner Dashboard Status Button */
 .status-btn {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: #eff6ff;
+  color: #2563eb;
   border: none;
   padding: 6px 12px;
   border-radius: 6px;
@@ -6602,11 +6609,14 @@ body, #root {
 .photo-upload-area {
   margin-bottom: 24px;
   text-align: center;
+  position: relative;
+  z-index: 1;
 }
 
 .photo-upload-button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   padding: 14px 28px;
   background: #2563eb;
@@ -6615,9 +6625,23 @@ body, #root {
   border-radius: 8px;
   font-size: 15px;
   font-weight: 600;
-  cursor: pointer;
+  cursor: pointer !important;
   transition: all 0.2s;
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  min-height: 48px;
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 10;
+  outline: none;
+}
+
+.photo-upload-button:focus {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
 }
 
 .photo-upload-button:hover:not(.uploading) {
@@ -6626,9 +6650,15 @@ body, #root {
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
+.photo-upload-button:active:not(.uploading) {
+  transform: translateY(0);
+}
+
 .photo-upload-button.uploading {
   background: #94a3b8;
-  cursor: not-allowed;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  opacity: 0.6;
 }
 
 .photo-upload-button i {
@@ -7045,7 +7075,32 @@ body, #root {
   .form-actions .secondary-btn, 
   .form-actions .save-btn { 
     width: 100%; 
-  } 
+  }
+
+  /* Photo Upload Responsive */
+  .photo-upload-button {
+    width: 100%;
+    max-width: 300px;
+    padding: 16px 24px;
+    font-size: 16px;
+  }
+
+  .photo-grid,
+  .photo-preview-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+
+  /* Dashboard Tabs Responsive */
+  .dashboard-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tab-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
 }
 
 /* Listing Edit Page Styles */

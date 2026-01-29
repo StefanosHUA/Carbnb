@@ -237,13 +237,26 @@ function VehiclePhotoUpload({ vehicleId, existingPhotos = [], onPhotosUpdated })
           style={{ display: 'none' }}
           id={`photo-upload-${vehicleId}`}
         />
-        <label
-          htmlFor={`photo-upload-${vehicleId}`}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Photo upload button clicked', { uploading, vehicleId });
+            if (!uploading && fileInputRef.current) {
+              console.log('Triggering file input click');
+              fileInputRef.current.click();
+            } else {
+              console.log('Cannot trigger upload:', { uploading, hasRef: !!fileInputRef.current });
+            }
+          }}
+          disabled={uploading}
           className={`photo-upload-button ${uploading ? 'uploading' : ''}`}
+          style={{ cursor: uploading ? 'not-allowed' : 'pointer' }}
         >
           <i className="fas fa-camera"></i>
           <span>{uploading ? 'Uploading...' : 'Add Photos'}</span>
-        </label>
+        </button>
         <p className="photo-upload-hint">You can upload multiple files at once (JPEG, PNG, max 10MB each)</p>
       </div>
 

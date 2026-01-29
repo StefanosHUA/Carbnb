@@ -25,24 +25,31 @@ function VehicleEditForm({ vehicle, onClose, onUpdate }) {
   });
 
   useEffect(() => {
+    console.log('[VehicleEditForm] Received vehicle prop:', vehicle);
     if (vehicle) {
-      setFormData({
-        make: vehicle.make || '',
-        model: vehicle.model || '',
-        year: vehicle.year || '',
-        color: vehicle.color || '',
-        license_plate: vehicle.license_plate || '',
-        vin: vehicle.vin || '',
+      const newFormData = {
+        make: vehicle.make ? String(vehicle.make) : '',
+        model: vehicle.model ? String(vehicle.model) : '',
+        year: vehicle.year ? String(vehicle.year) : '',
+        color: vehicle.color ? String(vehicle.color) : '',
+        license_plate: vehicle.license_plate ? String(vehicle.license_plate) : '',
+        vin: vehicle.vin ? String(vehicle.vin) : '',
         transmission: vehicle.transmission || 'automatic',
         fuel_type: vehicle.fuel_type || 'gasoline',
         category: vehicle.category || 'economy',
-        seats: vehicle.seats || '',
-        doors: vehicle.doors || '',
-        mileage: vehicle.mileage || '',
-        description: vehicle.description || '',
-        features: vehicle.features || '',
-        condition_notes: vehicle.condition_notes || ''
-      });
+        seats: vehicle.seats ? String(vehicle.seats) : '',
+        doors: vehicle.doors ? String(vehicle.doors) : '',
+        mileage: vehicle.mileage ? String(vehicle.mileage) : '',
+        description: vehicle.description ? String(vehicle.description) : '',
+        features: vehicle.features ? String(vehicle.features) : '',
+        condition_notes: vehicle.condition_notes ? String(vehicle.condition_notes) : ''
+      };
+      console.log('[VehicleEditForm] Setting form data:', newFormData);
+      console.log('[VehicleEditForm] Form data keys:', Object.keys(newFormData));
+      console.log('[VehicleEditForm] Sample values - make:', newFormData.make, 'model:', newFormData.model, 'year:', newFormData.year);
+      setFormData(newFormData);
+    } else {
+      console.log('[VehicleEditForm] No vehicle prop received!');
     }
   }, [vehicle]);
 
@@ -151,7 +158,25 @@ function VehicleEditForm({ vehicle, onClose, onUpdate }) {
     }
   };
 
-  if (!vehicle) return null;
+  if (!vehicle) {
+    console.log('[VehicleEditForm] Returning null - no vehicle');
+    return null;
+  }
+
+  // Additional check: make sure form data is initialized
+  if (!formData.make && !formData.model && vehicle.make) {
+    console.log('[VehicleEditForm] Form data not initialized yet, waiting...');
+    return (
+      <div className="vehicle-edit-form-section">
+        <div style={{ textAlign: 'center', padding: '2rem' }}>
+          <div className="loading-spinner"></div>
+          <p>Loading vehicle details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  console.log('[VehicleEditForm] Rendering form with formData:', formData);
 
   return (
     <div className="vehicle-edit-form-section">

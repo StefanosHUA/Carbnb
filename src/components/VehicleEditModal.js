@@ -27,26 +27,29 @@ function VehicleEditModal({ vehicle, onClose, onUpdate }) {
   });
 
   useEffect(() => {
+    console.log('[VehicleEditModal] Received vehicle:', vehicle);
     if (vehicle) {
-      setFormData({
-        make: vehicle.make || '',
-        model: vehicle.model || '',
-        year: vehicle.year || '',
-        color: vehicle.color || '',
-        license_plate: vehicle.license_plate || '',
-        vin: vehicle.vin || '',
+      const newFormData = {
+        make: vehicle.make ? String(vehicle.make) : '',
+        model: vehicle.model ? String(vehicle.model) : '',
+        year: vehicle.year ? String(vehicle.year) : '',
+        color: vehicle.color ? String(vehicle.color) : '',
+        license_plate: vehicle.license_plate ? String(vehicle.license_plate) : '',
+        vin: vehicle.vin ? String(vehicle.vin) : '',
         transmission: vehicle.transmission || 'automatic',
         fuel_type: vehicle.fuel_type || 'gasoline',
         category: vehicle.category || 'economy',
-        seats: vehicle.seats || '',
-        doors: vehicle.doors || '',
-        mileage: vehicle.mileage || '',
-        daily_rate: vehicle.daily_rate || '',
-        deposit_amount: vehicle.deposit_amount || '',
-        description: vehicle.description || '',
-        features: vehicle.features || '',
-        condition_notes: vehicle.condition_notes || ''
-      });
+        seats: vehicle.seats ? String(vehicle.seats) : '',
+        doors: vehicle.doors ? String(vehicle.doors) : '',
+        mileage: vehicle.mileage ? String(vehicle.mileage) : '',
+        daily_rate: vehicle.daily_rate ? String(vehicle.daily_rate) : '',
+        deposit_amount: vehicle.deposit_amount ? String(vehicle.deposit_amount) : '',
+        description: vehicle.description ? String(vehicle.description) : '',
+        features: vehicle.features ? String(vehicle.features) : '',
+        condition_notes: vehicle.condition_notes ? String(vehicle.condition_notes) : ''
+      };
+      console.log('[VehicleEditModal] Setting form data:', newFormData);
+      setFormData(newFormData);
     }
   }, [vehicle]);
 

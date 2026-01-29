@@ -31,7 +31,40 @@ function ListingEdit() {
     try {
       setLoading(true);
       const vehicleData = await vehiclesAPI.getById(id);
-      const vehicle = vehicleData.vehicle || vehicleData.data || vehicleData;
+      console.log('[ListingEdit] Raw vehicle data:', vehicleData);
+      console.log('[ListingEdit] Type of vehicleData:', typeof vehicleData);
+      console.log('[ListingEdit] vehicleData keys:', Object.keys(vehicleData || {}));
+      console.log('[ListingEdit] vehicleData.vehicle:', vehicleData?.vehicle);
+      console.log('[ListingEdit] vehicleData.data:', vehicleData?.data);
+      
+      // Backend bug: GET /vehicles/{id} returns a list instead of single vehicle
+      // Extract first item if it's an array or array-like object
+      let vehicle;
+      if (Array.isArray(vehicleData)) {
+        vehicle = vehicleData[0];
+        console.log('[ListingEdit] Extracted from array:', vehicle);
+      } else if (vehicleData && typeof vehicleData === 'object' && vehicleData[0]) {
+        vehicle = vehicleData[0];
+        console.log('[ListingEdit] Extracted from object with [0]:', vehicle);
+      } else {
+        vehicle = vehicleData;
+        console.log('[ListingEdit] Using vehicleData directly:', vehicle);
+      }
+      console.log('[ListingEdit] Extracted vehicle:', vehicle);
+      console.log('[ListingEdit] Extracted vehicle keys:', Object.keys(vehicle || {}));
+      console.log('[ListingEdit] Extracted vehicle.make:', vehicle?.make);
+      console.log('[ListingEdit] Extracted vehicle.model:', vehicle?.model);
+      console.log('[ListingEdit] Extracted vehicle.year:', vehicle?.year);
+      
+      // Ensure vehicle has an id property - use URL param if missing
+      if (!vehicle.id && id) {
+        console.log('[ListingEdit] Vehicle missing ID, using URL param:', id);
+        vehicle = { ...vehicle, id: parseInt(id) };
+      }
+      
+      console.log('[ListingEdit] Final vehicle object:', vehicle);
+      console.log('[ListingEdit] Final vehicle JSON:', JSON.stringify(vehicle, null, 2));
+      
       setVehicle(vehicle);
       setPricing({
         daily_rate: vehicle.daily_rate || '',
@@ -120,7 +153,9 @@ function ListingEdit() {
   };
 
   const getVehicleName = (vehicle) => {
-    return vehicle.name || `${vehicle.make || ''} ${vehicle.model || ''}`.trim() || `Vehicle #${vehicle.id}`;
+    if (!vehicle) return 'Loading...';
+    const vehicleId = vehicle.id || id;
+    return vehicle.name || `${vehicle.make || ''} ${vehicle.model || ''}`.trim() || `Vehicle #${vehicleId}`;
   };
 
   if (loading) {
