@@ -211,7 +211,7 @@ function VehicleDocuments() {
                       <h4>Vehicle License</h4>
                       {licenseDoc?.is_verified && (
                         <span className="badge-verified">
-                          <i className="fas fa-check-circle"></i> Verified
+                          <i className="fas fa-check-circle"></i> Approved
                         </span>
                       )}
                       {licenseDoc && !licenseDoc.is_verified && (
@@ -292,7 +292,7 @@ function VehicleDocuments() {
                       <h4>Insurance</h4>
                       {insuranceDoc?.is_verified && (
                         <span className="badge-verified">
-                          <i className="fas fa-check-circle"></i> Verified
+                          <i className="fas fa-check-circle"></i> Approved
                         </span>
                       )}
                       {insuranceDoc && !insuranceDoc.is_verified && (

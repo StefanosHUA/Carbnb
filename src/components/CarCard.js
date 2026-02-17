@@ -2,8 +2,10 @@ import React, { useState, memo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import ImageGallery from './ImageGallery';
 import { getPrimaryCarImage, getAllCarImages } from '../utils/carImages';
+import { useToastContext } from '../context/ToastContext';
 
 const CarCard = memo(function CarCard({ car }) {
+  const toast = useToastContext();
   const [showGallery, setShowGallery] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   
@@ -35,13 +37,16 @@ const CarCard = memo(function CarCard({ car }) {
     if (isFavorite) {
       // Remove from favorites
       newFavorites = favorites.filter(id => id !== car.id);
+      localStorage.setItem('carbnb_favorites', JSON.stringify(newFavorites));
+      setIsFavorite(false);
+      toast.info(`${car.name || 'Car'} removed from favorites`);
     } else {
       // Add to favorites
       newFavorites = [...favorites, car.id];
+      localStorage.setItem('carbnb_favorites', JSON.stringify(newFavorites));
+      setIsFavorite(true);
+      toast.success(`${car.name || 'Car'} added to favorites`);
     }
-    
-    localStorage.setItem('carbnb_favorites', JSON.stringify(newFavorites));
-    setIsFavorite(!isFavorite);
   };
 
   // Validate car.id before creating link
@@ -52,7 +57,11 @@ const CarCard = memo(function CarCard({ car }) {
 
   return (
     <>
-      <Link to={`/car/${car.id}`} className="car-card">
+      <Link 
+        to={`/car/${car.id}`} 
+        state={{ car, city: car.location?.city || (typeof car.location === 'object' && car.location?.city) || null }}
+        className="car-card"
+      >
         <div className="car-image-container">
           <img 
             src={primaryImage} 

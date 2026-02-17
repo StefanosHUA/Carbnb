@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useToastContext } from '../context/ToastContext';
 import { CarCardSkeleton } from '../components/LoadingSkeleton';
-import { authAPI, bookingsAPI, vehiclesAPI } from '../utils/api';
+import { authAPI, bookingsAPI, vehiclesAPI, searchAPI } from '../utils/api';
 import ProfileSettings from '../components/ProfileSettings';
 import PasswordSettings from '../components/PasswordSettings';
 import EmailUsernameSettings from '../components/EmailUsernameSettings';
@@ -19,6 +19,100 @@ function UserDashboard() {
   const [bookings, setBookings] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingBookings, setLoadingBookings] = useState(false);
+  const [loadingFavorites, setLoadingFavorites] = useState(false);
+
+  // Define loadFavorites function before useEffect hooks
+  // Optimized: Fetch favorite cars directly by ID in parallel for faster loading
+  const loadFavorites = async () => {
+    try {
+      setLoadingFavorites(true);
+      // Fetch favorite car IDs from localStorage
+      const favoriteIds = JSON.parse(localStorage.getItem('carbnb_favorites') || '[]');
+      
+      if (favoriteIds.length === 0) {
+        setFavorites([]);
+        setLoadingFavorites(false);
+        return;
+      }
+      
+      console.log(`[UserDashboard] Loading ${favoriteIds.length} favorite cars directly from database`);
+      
+      // Strategy: Fetch all active cars once, then filter by favorite IDs
+      // This is faster than individual requests and works for all users (not just owners)
+      // Using database query (not Elasticsearch) for faster response
+      try {
+        const filters = { is_active: true, limit: 500 }; // Reduced limit for faster query
+        const vehicles = await vehiclesAPI.getAll(filters);
+        const carsData = Array.isArray(vehicles) ? vehicles : (vehicles.data || vehicles.vehicles || []);
+        
+      console.log(`[UserDashboard] Retrieved ${carsData.length} active vehicles from database`);
+      
+      // Use Set for O(1) lookup instead of O(n) array.includes() - much faster for large datasets
+      const favoriteIdsSet = new Set(favoriteIds.map(id => parseInt(id)));
+      
+      // Filter to only include favorites - using Set for O(1) lookup
+      const favoriteCars = carsData.filter(car => {
+        const carId = parseInt(car.id || car.vehicle_id);
+        return favoriteIdsSet.has(carId);
+      });
+        
+        console.log(`[UserDashboard] Found ${favoriteCars.length} favorite cars in database`);
+        
+        // Normalize favorite cars
+        const normalizedCars = favoriteCars.map(car => {
+          const carId = parseInt(car.id || car.vehicle_id);
+          
+          // Normalize location
+          let locationStr = car.location;
+          if (car.location && typeof car.location === 'object') {
+            const loc = car.location;
+            if (loc.city && loc.state) {
+              locationStr = `${loc.city}, ${loc.state}`;
+            } else if (loc.city) {
+              locationStr = loc.city;
+            } else if (loc.state) {
+              locationStr = loc.state;
+            } else if (loc.name) {
+              locationStr = loc.name;
+            } else if (loc.address) {
+              locationStr = loc.address;
+            } else {
+              locationStr = 'Location not available';
+            }
+          }
+          
+          // Normalize car name and price
+          const carName = car.name || `${car.make || ''} ${car.model || ''}`.trim() || 'Car';
+          const carPrice = car.price || car.daily_rate || 0;
+          
+          // Get images using utility function
+          const images = getAllCarImages(car);
+          
+          return {
+            id: carId,
+            name: carName,
+            price: carPrice,
+            image: images[0] || car.primary_image_url || car.image || 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=400&q=80',
+            location: locationStr,
+            rating: car.rating || 0
+          };
+        });
+        
+        setFavorites(normalizedCars);
+      } catch (error) {
+        console.error('[UserDashboard] Error fetching favorites from database:', error);
+        toast.error('Failed to load favorites. Please try again.');
+        setFavorites([]);
+      }
+      
+    } catch (error) {
+      console.error('[UserDashboard] Error loading favorites:', error);
+      setFavorites([]);
+    } finally {
+      setLoadingFavorites(false);
+    }
+  };
 
   useEffect(() => {
     const savedUser = localStorage.getItem('carbnb_user');
@@ -30,6 +124,9 @@ function UserDashboard() {
 
     setUser(JSON.parse(savedUser));
     fetchUserData();
+    // Preload favorites and bookings immediately when user enters dashboard for faster tab switching
+    loadFavorites();
+    loadBookings();
   }, []);
 
   // Handle tab state from navigation
@@ -38,6 +135,167 @@ function UserDashboard() {
       setActiveTab(location.state.tab);
     }
   }, [location.state]);
+
+  // Refresh data when respective tab is active (data is preloaded on mount, this refreshes for latest data)
+  useEffect(() => {
+    if (activeTab === 'favorites') {
+      // Refresh favorites when favorites tab is clicked (data already preloaded on mount)
+      loadFavorites();
+    } else if (activeTab === 'bookings') {
+      // Refresh bookings when bookings tab is clicked (data already preloaded on mount)
+      loadBookings();
+    }
+  }, [activeTab]);
+
+  const loadBookings = async () => {
+    try {
+      setLoadingBookings(true);
+      console.log('[UserDashboard] Loading bookings...');
+      // Fetch user bookings
+      const bookingsData = await bookingsAPI.getMyBookings();
+      // Backend returns BookingListResponse with { bookings: [...], pagination: {...} }
+      let bookings = bookingsData.bookings || (Array.isArray(bookingsData) ? bookingsData : []);
+      
+      // Fetch vehicle details for each booking if vehicle_id is present
+      // Optimized: Batch fetch all vehicles at once, then create a Map for O(1) lookup
+      if (bookings.length > 0) {
+        // Collect all unique vehicle IDs from bookings
+        const vehicleIds = [...new Set(bookings
+          .map(b => b.vehicle_id || (b.vehicle?.id) || (b.car?.id))
+          .filter(id => id !== null && id !== undefined)
+        )];
+        
+        console.log(`[UserDashboard] Loading ${vehicleIds.length} unique vehicles for ${bookings.length} bookings`);
+        
+        // Batch fetch all vehicles at once (much faster than individual requests)
+        let vehiclesMap = new Map();
+        if (vehicleIds.length > 0) {
+          try {
+            // Fetch all active vehicles, then filter by vehicle IDs
+            const filters = { is_active: true, limit: 500 };
+            const vehicles = await vehiclesAPI.getAll(filters);
+            const carsData = Array.isArray(vehicles) ? vehicles : (vehicles.data || vehicles.vehicles || []);
+            
+            // Create a Map for O(1) lookup by vehicle ID
+            carsData.forEach(car => {
+              const carId = parseInt(car.id || car.vehicle_id);
+              if (carId && vehicleIds.includes(carId)) {
+                vehiclesMap.set(carId, car);
+              }
+            });
+            
+            console.log(`[UserDashboard] Loaded ${vehiclesMap.size} vehicles into map`);
+          } catch (error) {
+            console.warn('[UserDashboard] Batch fetch failed, falling back to individual requests:', error);
+          }
+        }
+        
+        // Process bookings with optimized vehicle lookup
+        const bookingsWithCars = bookings.map(booking => {
+          try {
+            let vehicle = null;
+            const vehicleId = booking.vehicle_id || booking.vehicle?.id || booking.car?.id;
+            
+            // Try to get vehicle from map first (O(1) lookup)
+            if (vehicleId && vehiclesMap.has(parseInt(vehicleId))) {
+              vehicle = vehiclesMap.get(parseInt(vehicleId));
+            } else if (booking.vehicle || booking.car) {
+              // Fallback to booking's vehicle/car object
+              vehicle = booking.vehicle || booking.car;
+            }
+            
+            if (vehicle) {
+              // Normalize location
+              let locationStr = vehicle.location;
+              if (vehicle.location && typeof vehicle.location === 'object') {
+                const loc = vehicle.location;
+                if (loc.city && loc.state) {
+                  locationStr = `${loc.city}, ${loc.state}`;
+                } else if (loc.city) {
+                  locationStr = loc.city;
+                } else if (loc.state) {
+                  locationStr = loc.state;
+                } else if (loc.name) {
+                  locationStr = loc.name;
+                } else if (loc.address) {
+                  locationStr = loc.address;
+                } else {
+                  locationStr = 'Location not available';
+                }
+              }
+              
+              // Normalize images
+              const images = getAllCarImages(vehicle);
+              
+              const vehicleName = vehicle.name || `${vehicle.make || ''} ${vehicle.model || ''}`.trim() || 'Car';
+              
+              return {
+                ...booking,
+                car: {
+                  id: parseInt(vehicle.id || vehicle.vehicle_id || vehicleId),
+                  vehicle_id: parseInt(vehicle.id || vehicle.vehicle_id || vehicleId),
+                  name: vehicleName,
+                  make: vehicle.make || '',
+                  model: vehicle.model || '',
+                  brand: vehicle.make || vehicle.brand || '',
+                  category: vehicle.category || vehicle.vehicle_type || '',
+                  vehicle_type: vehicle.category || vehicle.vehicle_type || '',
+                  price: vehicle.price || vehicle.daily_rate || 0,
+                  daily_rate: vehicle.daily_rate || vehicle.price || 0,
+                  image: images[0] || vehicle.primary_image_url || vehicle.image || 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=400&q=80',
+                  location: locationStr, // Always a string for display
+                  locationString: locationStr,
+                  // Keep original location object for navigation state if needed
+                  locationObject: vehicle.location
+                },
+                total: booking.total_cost || booking.total_amount || booking.total || 0
+              };
+            } else {
+              // Booking without vehicle info - still include vehicle_id for "View Car" link
+              return {
+                ...booking,
+                car: {
+                  id: vehicleId ? parseInt(vehicleId) : null,
+                  name: 'Vehicle',
+                  image: 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=400&q=80',
+                  location: 'Location not available'
+                },
+                total: booking.total_cost || booking.total_amount || booking.total || 0
+              };
+            }
+          } catch (error) {
+            console.error(`Error processing booking ${booking.id}:`, error);
+            return {
+              ...booking,
+              car: {
+                id: booking.vehicle_id ? parseInt(booking.vehicle_id) : null,
+                name: 'Vehicle',
+                image: 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=400&q=80',
+                location: 'Location not available'
+              },
+              total: booking.total_cost || booking.total_amount || booking.total || 0
+            };
+          }
+        });
+        
+        setBookings(bookingsWithCars);
+      } else {
+        setBookings([]);
+      }
+    } catch (error) {
+      console.error('[UserDashboard] Error loading bookings:', error);
+      setBookings([]);
+      if (error.message && !error.message.includes('Failed to fetch') && !error.message.includes('NetworkError')) {
+        toast.error(error.message || 'Failed to load bookings.');
+      } else if (error.status === 0) {
+        toast.error('Cannot connect to booking service. Bookings may be temporarily unavailable.');
+      } else {
+        toast.error('Failed to load bookings.');
+      }
+    } finally {
+      setLoadingBookings(false);
+    }
+  };
 
   const fetchUserData = async () => {
     try {
@@ -64,210 +322,9 @@ function UserDashboard() {
         setUser(userProfile);
       }
       
-      // Fetch user bookings
-      const bookingsData = await bookingsAPI.getMyBookings();
-      // Backend returns BookingListResponse with { bookings: [...], pagination: {...} }
-      let bookings = bookingsData.bookings || (Array.isArray(bookingsData) ? bookingsData : []);
-      
-      // Fetch vehicle details for each booking if vehicle_id is present
-      if (bookings.length > 0) {
-        const bookingsWithCars = await Promise.all(bookings.map(async (booking) => {
-          try {
-            // If booking already has vehicle/car object, use it
-            if (booking.vehicle || booking.car) {
-              const vehicle = booking.vehicle || booking.car;
-              
-              // Normalize location
-              let locationStr = vehicle.location;
-              if (vehicle.location && typeof vehicle.location === 'object') {
-                const loc = vehicle.location;
-                if (loc.city && loc.state) {
-                  locationStr = `${loc.city}, ${loc.state}`;
-                } else if (loc.city) {
-                  locationStr = loc.city;
-                } else if (loc.state) {
-                  locationStr = loc.state;
-                } else if (loc.name) {
-                  locationStr = loc.name;
-                } else if (loc.address) {
-                  locationStr = loc.address;
-                } else {
-                  locationStr = 'Location not available';
-                }
-              }
-              
-              // Normalize images
-              let images = [];
-              // Use utility function to get all car images (prioritizes uploaded media)
-              images = getAllCarImages(vehicle);
-              
-              const vehicleName = vehicle.name || `${vehicle.make || ''} ${vehicle.model || ''}`.trim() || 'Car';
-              
-              return {
-                ...booking,
-                car: {
-                  id: vehicle.id || booking.vehicle_id,
-                  name: vehicleName,
-                  image: images[0],
-                  location: locationStr
-                },
-                total: booking.total_cost || booking.total_amount || booking.total || 0
-              };
-            } else if (booking.vehicle_id) {
-              // Fetch vehicle details
-              const vehicleData = await vehiclesAPI.getById(booking.vehicle_id);
-              const vehicle = vehicleData.vehicle || vehicleData.data || vehicleData;
-              
-              // Normalize location
-              let locationStr = vehicle.location;
-              if (vehicle.location && typeof vehicle.location === 'object') {
-                const loc = vehicle.location;
-                if (loc.city && loc.state) {
-                  locationStr = `${loc.city}, ${loc.state}`;
-                } else if (loc.city) {
-                  locationStr = loc.city;
-                } else if (loc.state) {
-                  locationStr = loc.state;
-                } else if (loc.name) {
-                  locationStr = loc.name;
-                } else if (loc.address) {
-                  locationStr = loc.address;
-                } else {
-                  locationStr = 'Location not available';
-                }
-              }
-              
-              // Normalize images
-              let images = [];
-              // Use utility function to get all car images (prioritizes uploaded media)
-              images = getAllCarImages(vehicle);
-              
-              const vehicleName = vehicle.name || `${vehicle.make || ''} ${vehicle.model || ''}`.trim() || 'Car';
-              
-              return {
-                ...booking,
-                car: {
-                  id: vehicle.id,
-                  name: vehicleName,
-                  image: images[0],
-                  location: locationStr
-                },
-                total: booking.total_cost || booking.total_amount || booking.total || 0
-              };
-            } else {
-              // Booking without vehicle info
-              return {
-                ...booking,
-                car: {
-                  id: booking.vehicle_id || null,
-                  name: 'Vehicle',
-                  image: 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=400&q=80',
-                  location: 'Location not available'
-                },
-                total: booking.total_cost || booking.total_amount || booking.total || 0
-              };
-            }
-          } catch (error) {
-            console.error(`Error fetching vehicle for booking ${booking.id}:`, error);
-            return {
-              ...booking,
-              car: {
-                id: booking.vehicle_id || null,
-                name: 'Vehicle',
-                image: 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=400&q=80',
-                location: 'Location not available'
-              },
-              total: booking.total_cost || booking.total_amount || booking.total || 0
-            };
-          }
-        }));
-        
-        setBookings(bookingsWithCars);
-      } else {
-        setBookings([]);
-      }
-      
-      // Fetch favorite cars from localStorage (favorites stored as IDs)
-      // In a real app, this would come from a favorites API endpoint
-      const favoriteIds = JSON.parse(localStorage.getItem('carbnb_favorites') || '[]');
-      if (favoriteIds.length > 0) {
-        // Fetch vehicle details for each favorite ID
-        const favoriteCarsPromises = favoriteIds.map(async (carId) => {
-          try {
-            console.log(`[UserDashboard] Fetching favorite car with ID: ${carId}`);
-            const carData = await vehiclesAPI.getById(carId);
-            console.log(`[UserDashboard] Raw car data for ID ${carId}:`, carData);
-            
-            const car = carData.vehicle || carData.data || carData;
-            console.log(`[UserDashboard] Extracted car object:`, car);
-            
-            // Ensure we have a valid car ID - use the carId parameter if car.id is missing
-            if (!car || (!car.id && !carId)) {
-              console.error(`[UserDashboard] Invalid car data for ID ${carId}:`, car);
-              return null;
-            }
-            
-            const validCarId = car.id || carId;
-            console.log(`[UserDashboard] Using car ID: ${validCarId}`);
-            
-            // Normalize location
-            let locationStr = car.location;
-            if (car.location && typeof car.location === 'object') {
-              const loc = car.location;
-              if (loc.city && loc.state) {
-                locationStr = `${loc.city}, ${loc.state}`;
-              } else if (loc.city) {
-                locationStr = loc.city;
-              } else if (loc.state) {
-                locationStr = loc.state;
-              } else if (loc.name) {
-                locationStr = loc.name;
-              } else if (loc.address) {
-                locationStr = loc.address;
-              } else {
-                locationStr = 'Location not available';
-              }
-            }
-            
-            // Normalize car name and price
-            const carName = car.name || `${car.make || ''} ${car.model || ''}`.trim() || 'Car';
-            const carPrice = car.price || car.daily_rate || 0;
-            
-            // Normalize images
-            let images = [];
-            if (car.images && Array.isArray(car.images) && car.images.length > 0) {
-              images = car.images;
-            } else if (car.media && Array.isArray(car.media) && car.media.length > 0) {
-              images = car.media
-                .filter(m => m.media_url || m.url || m.image)
-                .map(m => m.media_url || m.url || m.image);
-            } else if (car.image) {
-              images = [car.image];
-            } else {
-              images = ['https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=400&q=80'];
-            }
-            
-            const normalizedCar = {
-              id: validCarId,
-              name: carName,
-              price: carPrice,
-              image: images[0],
-              location: locationStr,
-              rating: car.rating || 0
-            };
-            
-            console.log(`[UserDashboard] Normalized favorite car:`, normalizedCar);
-            return normalizedCar;
-          } catch (error) {
-            console.error(`Error fetching favorite car ${carId}:`, error);
-            return null;
-          }
-        });
-        
-        const favoriteCars = await Promise.all(favoriteCarsPromises);
-        setFavorites(favoriteCars.filter(car => car !== null));
-      } else {
-        setFavorites([]);
+      // Load data for the active tab (favorites are loaded immediately on mount)
+      if (activeTab === 'bookings') {
+        loadBookings();
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -278,10 +335,6 @@ function UserDashboard() {
       } else {
         toast.error('Failed to load dashboard data.');
       }
-      
-      // Set empty arrays instead of mock data
-      setBookings([]);
-      setFavorites([]);
     } finally {
       setLoading(false);
     }
@@ -375,6 +428,98 @@ function UserDashboard() {
         <div className="dashboard-content">
           {activeTab === 'profile' && (
             <div className="profile-tab">
+              {/* Profile Information Display */}
+              {user && (
+                <div style={{
+                  background: '#fff',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  marginBottom: '24px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}>
+                  <h3 style={{ marginBottom: '20px', color: '#222', fontSize: '18px', fontWeight: '600' }}>
+                    <i className="fas fa-user" style={{ marginRight: '8px' }}></i>
+                    Profile Information
+                  </h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
+                    {user.first_name && (
+                      <div>
+                        <strong style={{ color: '#717171', fontSize: '13px', display: 'block', marginBottom: '4px' }}>First Name</strong>
+                        <span style={{ color: '#222', fontSize: '15px' }}>{user.first_name}</span>
+                      </div>
+                    )}
+                    {user.last_name && (
+                      <div>
+                        <strong style={{ color: '#717171', fontSize: '13px', display: 'block', marginBottom: '4px' }}>Last Name</strong>
+                        <span style={{ color: '#222', fontSize: '15px' }}>{user.last_name}</span>
+                      </div>
+                    )}
+                    {user.email && (
+                      <div>
+                        <strong style={{ color: '#717171', fontSize: '13px', display: 'block', marginBottom: '4px' }}>Email</strong>
+                        <span style={{ color: '#222', fontSize: '15px' }}>{user.email}</span>
+                      </div>
+                    )}
+                    {user.phone_number && (
+                      <div>
+                        <strong style={{ color: '#717171', fontSize: '13px', display: 'block', marginBottom: '4px' }}>Phone Number</strong>
+                        <span style={{ color: '#222', fontSize: '15px' }}>{user.phone_number}</span>
+                      </div>
+                    )}
+                    {user.date_of_birth && (
+                      <div>
+                        <strong style={{ color: '#717171', fontSize: '13px', display: 'block', marginBottom: '4px' }}>Date of Birth</strong>
+                        <span style={{ color: '#222', fontSize: '15px' }}>
+                          {(() => {
+                            try {
+                              const date = new Date(user.date_of_birth);
+                              if (!isNaN(date.getTime())) {
+                                return date.toLocaleDateString('en-US', { 
+                                  year: 'numeric', 
+                                  month: 'long', 
+                                  day: 'numeric' 
+                                });
+                              }
+                            } catch (e) {}
+                            return user.date_of_birth;
+                          })()}
+                        </span>
+                      </div>
+                    )}
+                    {user.address && (
+                      <div>
+                        <strong style={{ color: '#717171', fontSize: '13px', display: 'block', marginBottom: '4px' }}>Address</strong>
+                        <span style={{ color: '#222', fontSize: '15px' }}>{user.address}</span>
+                      </div>
+                    )}
+                    {user.city && (
+                      <div>
+                        <strong style={{ color: '#717171', fontSize: '13px', display: 'block', marginBottom: '4px' }}>City</strong>
+                        <span style={{ color: '#222', fontSize: '15px' }}>{user.city}</span>
+                      </div>
+                    )}
+                    {user.country && (
+                      <div>
+                        <strong style={{ color: '#717171', fontSize: '13px', display: 'block', marginBottom: '4px' }}>Country</strong>
+                        <span style={{ color: '#222', fontSize: '15px' }}>{user.country}</span>
+                      </div>
+                    )}
+                    {user.postal_code && (
+                      <div>
+                        <strong style={{ color: '#717171', fontSize: '13px', display: 'block', marginBottom: '4px' }}>Postal Code</strong>
+                        <span style={{ color: '#222', fontSize: '15px' }}>{user.postal_code}</span>
+                      </div>
+                    )}
+                    {user.bio && (
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <strong style={{ color: '#717171', fontSize: '13px', display: 'block', marginBottom: '4px' }}>Bio</strong>
+                        <span style={{ color: '#222', fontSize: '15px', lineHeight: '1.6' }}>{user.bio}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
               <ProfileSettings 
                 user={user} 
                 onUpdate={(updatedUser) => {
@@ -419,7 +564,13 @@ function UserDashboard() {
                 <h2>My Favorites</h2>
               </div>
 
-              {favorites.length === 0 ? (
+              {loadingFavorites ? (
+                <div className="empty-state">
+                  <CarCardSkeleton />
+                  <CarCardSkeleton />
+                  <CarCardSkeleton />
+                </div>
+              ) : favorites.length === 0 ? (
                 <div className="empty-state">
                   <i className="fas fa-heart"></i>
                   <h3>No favorites yet</h3>
@@ -484,7 +635,13 @@ function UserDashboard() {
                 </Link>
               </div>
 
-              {bookings.length === 0 ? (
+              {loadingBookings ? (
+                <div className="empty-state">
+                  <CarCardSkeleton />
+                  <CarCardSkeleton />
+                  <CarCardSkeleton />
+                </div>
+              ) : bookings.length === 0 ? (
                 <div className="empty-state">
                   <i className="fas fa-calendar-times"></i>
                   <h3>No bookings yet</h3>
@@ -502,7 +659,17 @@ function UserDashboard() {
                         <div className="booking-header">
                           <div>
                             <h3>{booking.car.name}</h3>
-                            <p><i className="fas fa-map-marker-alt"></i> {booking.car.location}</p>
+                            <p><i className="fas fa-map-marker-alt"></i> {(() => {
+                              if (!booking.car.location) return 'Location not available';
+                              if (typeof booking.car.location === 'string') return booking.car.location;
+                              const loc = booking.car.location;
+                              if (loc.city && loc.state) return `${loc.city}, ${loc.state}`;
+                              if (loc.city) return loc.city;
+                              if (loc.state) return loc.state;
+                              if (loc.name) return loc.name;
+                              if (loc.address) return loc.address;
+                              return 'Location not available';
+                            })()}</p>
                           </div>
                           {getStatusBadge(booking.status)}
                         </div>
@@ -521,7 +688,14 @@ function UserDashboard() {
                           </div>
                         </div>
                         <div className="booking-actions">
-                          <Link to={`/car/${booking.car.id}`} className="action-link">
+                          <Link 
+                            to={`/car/${booking.car?.id || booking.vehicle_id || booking.id}`} 
+                            state={{ 
+                              car: booking.car, 
+                              city: booking.car?.location?.city || (typeof booking.car?.location === 'object' && booking.car?.location?.city) || null 
+                            }}
+                            className="action-link"
+                          >
                             View Car
                           </Link>
                           {(booking.status === 'upcoming' || booking.status === 'confirmed' || booking.status === 'pending') && booking.can_be_cancelled !== false && (

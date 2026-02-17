@@ -15,11 +15,41 @@ function ProfileSettings({ user, onUpdate }) {
     postal_code: '',
     date_of_birth: '',
   });
+  const [dateParts, setDateParts] = useState({
+    month: '',
+    day: '',
+    year: ''
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
     if (user) {
+      const dob = user.date_of_birth || '';
+      let month = '', day = '', year = '';
+      
+      // Parse date_of_birth if it exists (format: YYYY-MM-DD or similar)
+      if (dob) {
+        try {
+          const date = new Date(dob);
+          if (!isNaN(date.getTime())) {
+            month = String(date.getMonth() + 1).padStart(2, '0');
+            day = String(date.getDate()).padStart(2, '0');
+            year = String(date.getFullYear());
+          } else if (dob.includes('-')) {
+            // Try parsing YYYY-MM-DD format
+            const parts = dob.split('-');
+            if (parts.length === 3) {
+              year = parts[0];
+              month = parts[1];
+              day = parts[2];
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing date_of_birth:', e);
+        }
+      }
+      
       setFormData({
         first_name: user.first_name || '',
         last_name: user.last_name || '',
@@ -29,8 +59,10 @@ function ProfileSettings({ user, onUpdate }) {
         city: user.city || '',
         country: user.country || '',
         postal_code: user.postal_code || '',
-        date_of_birth: user.date_of_birth || '',
+        date_of_birth: dob,
       });
+      
+      setDateParts({ month, day, year });
     }
   }, [user]);
 
@@ -48,6 +80,56 @@ function ProfileSettings({ user, onUpdate }) {
       }));
     }
   };
+
+  const handleDateChange = (part, value) => {
+    setDateParts(prev => {
+      const newParts = { ...prev, [part]: value };
+      
+      // Construct date string in YYYY-MM-DD format when all parts are filled
+      if (newParts.month && newParts.day && newParts.year) {
+        const month = newParts.month.padStart(2, '0');
+        const day = newParts.day.padStart(2, '0');
+        const year = newParts.year;
+        const dateString = `${year}-${month}-${day}`;
+        setFormData(prev => ({
+          ...prev,
+          date_of_birth: dateString
+        }));
+      } else {
+        setFormData(prev => ({
+          ...prev,
+          date_of_birth: ''
+        }));
+      }
+      
+      return newParts;
+    });
+    
+    // Clear error when user starts typing
+    if (errors.date_of_birth) {
+      setErrors(prev => ({
+        ...prev,
+        date_of_birth: ''
+      }));
+    }
+  };
+
+  // Generate arrays for date dropdowns
+  const months = Array.from({ length: 12 }, (_, i) => ({
+    value: String(i + 1).padStart(2, '0'),
+    label: new Date(2000, i, 1).toLocaleString('default', { month: 'long' })
+  }));
+
+  const days = Array.from({ length: 31 }, (_, i) => ({
+    value: String(i + 1).padStart(2, '0'),
+    label: String(i + 1)
+  }));
+
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 100 }, (_, i) => ({
+    value: String(currentYear - i),
+    label: String(currentYear - i)
+  }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -151,17 +233,74 @@ function ProfileSettings({ user, onUpdate }) {
         </div>
 
         <div className="form-group">
-          <label htmlFor="date_of_birth">Date of Birth</label>
-          <input
-            type="date"
-            id="date_of_birth"
-            name="date_of_birth"
-            value={formData.date_of_birth}
-            onChange={handleChange}
-            className={errors.date_of_birth ? 'error' : ''}
-          />
+          <label>Date of Birth</label>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <select
+              value={dateParts.month}
+              onChange={(e) => handleDateChange('month', e.target.value)}
+              style={{
+                flex: 1,
+                padding: '10px',
+                borderRadius: '6px',
+                border: errors.date_of_birth ? '1px solid #e74c3c' : '1px solid #ddd',
+                fontSize: '14px',
+                backgroundColor: '#fff',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="">Month</option>
+              {months.map(month => (
+                <option key={month.value} value={month.value}>{month.label}</option>
+              ))}
+            </select>
+            <select
+              value={dateParts.day}
+              onChange={(e) => handleDateChange('day', e.target.value)}
+              style={{
+                flex: 1,
+                padding: '10px',
+                borderRadius: '6px',
+                border: errors.date_of_birth ? '1px solid #e74c3c' : '1px solid #ddd',
+                fontSize: '14px',
+                backgroundColor: '#fff',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="">Day</option>
+              {days.map(day => (
+                <option key={day.value} value={day.value}>{day.label}</option>
+              ))}
+            </select>
+            <select
+              value={dateParts.year}
+              onChange={(e) => handleDateChange('year', e.target.value)}
+              style={{
+                flex: 1,
+                padding: '10px',
+                borderRadius: '6px',
+                border: errors.date_of_birth ? '1px solid #e74c3c' : '1px solid #ddd',
+                fontSize: '14px',
+                backgroundColor: '#fff',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="">Year</option>
+              {years.map(year => (
+                <option key={year.value} value={year.value}>{year.label}</option>
+              ))}
+            </select>
+          </div>
           {errors.date_of_birth && (
             <span className="error-text">{errors.date_of_birth}</span>
+          )}
+          {formData.date_of_birth && (
+            <div style={{ marginTop: '8px', fontSize: '13px', color: '#717171' }}>
+              Selected: {new Date(formData.date_of_birth).toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}
+            </div>
           )}
         </div>
 

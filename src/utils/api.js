@@ -883,6 +883,18 @@ export const vehiclesAPI = {
   },
 
   /**
+   * Verify vehicle document (Admin only)
+   * PATCH /api/v1/documents/verify/:doc_id
+   */
+  verifyDocument: async (docId, isVerified) => {
+    return apiRequest(`/api/v1/documents/verify/${docId}`, {
+      method: 'PATCH',
+      body: { is_verified: isVerified },
+      service: 'vehicles',
+    });
+  },
+
+  /**
    * Upload vehicle media (photo)
    * POST /api/v1/media/upload/:vehicle_id
    */
@@ -1231,9 +1243,7 @@ export const searchAPI = {
     if (searchParams.max_seats) {
       queryParams.append('max_seats', searchParams.max_seats);
     }
-    if (searchParams.city) {
-      queryParams.append('city', searchParams.city);
-    }
+    // Note: city is already added above, don't add it again
     if (searchParams.state) {
       queryParams.append('state', searchParams.state);
     }

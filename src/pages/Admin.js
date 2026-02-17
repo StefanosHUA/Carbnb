@@ -39,6 +39,10 @@ function Admin() {
   const [userDocuments, setUserDocuments] = useState([]);
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [showDocumentsModal, setShowDocumentsModal] = useState(false);
+  const [selectedCar, setSelectedCar] = useState(null);
+  const [carDocuments, setCarDocuments] = useState([]);
+  const [loadingCarDocuments, setLoadingCarDocuments] = useState(false);
+  const [showCarModal, setShowCarModal] = useState(false);
 
   // Vehicle form state
   const [vehicleForm, setVehicleForm] = useState({
@@ -165,11 +169,30 @@ function Admin() {
       const activeCars = allVehicles.filter(v => v.is_active).length;
       
       // Load bookings count - handle gracefully if service is unavailable
-      let totalBookings = 0;
+      // Count only approved bookings (status === 'confirmed')
+      // Use the booking service's status filter and pagination for efficiency
+      let approvedBookings = 0;
       try {
-        const bookingsData = await bookingsAPI.getAll({ page_size: 1 });
-        totalBookings = bookingsData?.total || bookingsData?.items?.length || bookingsData?.length || 0;
+        // Use status filter to get only confirmed bookings, with minimal page_size
+        const bookingsData = await bookingsAPI.getAll({ 
+          status: 'confirmed',
+          page: 1,
+          page_size: 1  // We only need the total_count from pagination
+        });
+        console.log('[Admin Dashboard] Bookings API response:', bookingsData);
+        
+        // The booking service returns BookingListResponse with structure:
+        // { bookings: [...], pagination: { total_count, page, page_size, ... } }
+        if (bookingsData?.pagination?.total_count !== undefined) {
+          approvedBookings = bookingsData.pagination.total_count;
+          console.log('[Admin Dashboard] Approved bookings count from pagination:', approvedBookings);
+        } else if (bookingsData?.bookings) {
+          // Fallback: count the bookings array if pagination is not available
+          approvedBookings = bookingsData.bookings.length;
+          console.log('[Admin Dashboard] Approved bookings count from array:', approvedBookings);
+        }
       } catch (error) {
+        console.error('[Admin Dashboard] Error loading bookings:', error);
         console.warn('Bookings service unavailable:', error);
         // Don't show error toast, just leave bookings at 0
       }
@@ -177,7 +200,7 @@ function Admin() {
       setDashboardStats({
         totalUsers: userStats?.total_users || 0,
         totalCars: totalCars,
-        totalBookings: totalBookings,
+        totalBookings: approvedBookings,
         totalRevenue: 0, // Calculate from bookings if needed
         pendingApprovals: 0, // Calculate if needed
         activeListings: activeCars
@@ -244,8 +267,8 @@ function Admin() {
         if (response.length < carsPerPage) {
           setCarsTotal((carsPage - 1) * carsPerPage + response.length);
         } else {
-          // Estimate there might be more
-          setCarsTotal(carsPage * carsPerPage + 1);
+          // Estimate there might be more - use a reasonable estimate
+          setCarsTotal((carsPage + 1) * carsPerPage);
         }
       } else if (response?.items) {
         console.log('[Admin] Processing as items object, count:', response.items.length);
@@ -470,6 +493,39 @@ function Admin() {
       }
     } catch (error) {
       console.error('Error verifying document:', error);
+      toast.error(error.message || 'Failed to verify document');
+    }
+  };
+
+  const handleViewCar = async (car) => {
+    setSelectedCar(car);
+    setShowCarModal(true);
+    setLoadingCarDocuments(true);
+    try {
+      const docs = await vehiclesAPI.getDocuments(car.id);
+      setCarDocuments(Array.isArray(docs) ? docs : (docs?.documents || []));
+    } catch (error) {
+      console.error('Error loading car documents:', error);
+      toast.error('Failed to load car documents');
+      setCarDocuments([]);
+    } finally {
+      setLoadingCarDocuments(false);
+    }
+  };
+
+  const handleVerifyCarDocument = async (docId, isVerified) => {
+    try {
+      await vehiclesAPI.verifyDocument(docId, isVerified);
+      toast.success(`Document ${isVerified ? 'approved' : 'disapproved'} successfully`);
+      // Reload documents
+      if (selectedCar) {
+        const docs = await vehiclesAPI.getDocuments(selectedCar.id);
+        setCarDocuments(Array.isArray(docs) ? docs : (docs?.documents || []));
+        // Reload cars list to update status
+        loadCars();
+      }
+    } catch (error) {
+      console.error('Error verifying car document:', error);
       toast.error(error.message || 'Failed to verify document');
     }
   };
@@ -741,7 +797,7 @@ function Admin() {
           <div className="stat-icon">📅</div>
           <div className="stat-content">
             <h3>{dashboardStats.totalBookings}</h3>
-            <p>Total Bookings</p>
+            <p>Approved Bookings</p>
           </div>
         </div>
         
@@ -1003,10 +1059,7 @@ function Admin() {
                         </button>
                         <button 
                           className="action-btn view"
-                          onClick={() => {
-                            const carInfo = JSON.stringify(car, null, 2);
-                            alert(`Vehicle Details:\n\n${carInfo}`);
-                          }}
+                          onClick={() => handleViewCar(car)}
                         >
                           View
                         </button>
@@ -1036,7 +1089,7 @@ function Admin() {
           
           <div className="pagination" style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0' }}>
             <div style={{ color: '#717171', fontSize: '14px' }}>
-              Showing page {carsPage} of {Math.ceil(carsTotal / carsPerPage) || 1}
+              Showing page {carsPage} of {Math.max(1, Math.ceil(carsTotal / carsPerPage))}
             </div>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               {carsPage > 1 && (
@@ -1170,14 +1223,6 @@ function Admin() {
     </div>
   );
 
-  const renderSettings = () => (
-    <div className="settings-section">
-      <h2>Admin Settings</h2>
-      <p style={{ color: '#717171', marginBottom: '24px' }}>
-        Settings functionality coming soon.
-      </p>
-    </div>
-  );
 
   const getDocTypeLabel = (type) => {
     const labels = {
@@ -1285,6 +1330,231 @@ function Admin() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderCarModal = () => {
+    if (!showCarModal || !selectedCar) return null;
+
+    const licenseDoc = carDocuments.find(doc => doc.doc_type === 'license');
+    const insuranceDoc = carDocuments.find(doc => doc.doc_type === 'insurance');
+
+    return (
+      <div className="modal-overlay" onClick={() => setShowCarModal(false)} style={{ 
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10000,
+        padding: '20px'
+      }}>
+        <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ 
+          maxWidth: '900px', 
+          width: '100%',
+          maxHeight: '90vh', 
+          overflow: 'auto',
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)'
+        }}>
+          <div className="modal-header">
+            <h2>
+              Vehicle Details: {selectedCar.make} {selectedCar.model} ({selectedCar.year})
+            </h2>
+            <button className="modal-close" onClick={() => setShowCarModal(false)}>
+              <i className="fas fa-times"></i>
+            </button>
+          </div>
+          <div className="modal-body" style={{ padding: '24px' }}>
+            {/* Car Details Section */}
+            <div style={{ marginBottom: '32px' }}>
+              <h3 style={{ marginBottom: '16px', color: '#222', fontSize: '18px', fontWeight: '600' }}>Vehicle Information</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+                <div>
+                  <strong>ID:</strong> {selectedCar.id}
+                </div>
+                <div>
+                  <strong>Status:</strong> 
+                  <span className={`status-badge ${selectedCar.is_active ? 'active' : 'suspended'}`} style={{ marginLeft: '8px' }}>
+                    {selectedCar.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+                <div>
+                  <strong>Make:</strong> {selectedCar.make || 'N/A'}
+                </div>
+                <div>
+                  <strong>Model:</strong> {selectedCar.model || 'N/A'}
+                </div>
+                <div>
+                  <strong>Year:</strong> {selectedCar.year || 'N/A'}
+                </div>
+                <div>
+                  <strong>Color:</strong> {selectedCar.color || 'N/A'}
+                </div>
+                <div>
+                  <strong>Price/Day:</strong> ${selectedCar.daily_rate?.toFixed(2) || '0.00'}
+                </div>
+                <div>
+                  <strong>Transmission:</strong> {selectedCar.transmission || 'N/A'}
+                </div>
+                <div>
+                  <strong>Fuel Type:</strong> {selectedCar.fuel_type || 'N/A'}
+                </div>
+                <div>
+                  <strong>Seats:</strong> {selectedCar.seats || 'N/A'}
+                </div>
+                {selectedCar.location && (
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <strong>Location:</strong> {
+                      selectedCar.location.city && selectedCar.location.state
+                        ? `${selectedCar.location.city}, ${selectedCar.location.state}`
+                        : selectedCar.location.city || selectedCar.location.state || selectedCar.location.name || 'N/A'
+                    }
+                  </div>
+                )}
+                {selectedCar.description && (
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <strong>Description:</strong> {selectedCar.description}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Documents Section */}
+            <div>
+              <h3 style={{ marginBottom: '16px', color: '#222', fontSize: '18px', fontWeight: '600' }}>Vehicle Documents</h3>
+              {loadingCarDocuments ? (
+                <div style={{ textAlign: 'center', padding: '40px' }}>Loading documents...</div>
+              ) : carDocuments.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '20px', color: '#717171' }}>
+                  <p>No documents uploaded</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: '16px' }}>
+                  {/* License Document */}
+                  {licenseDoc ? (
+                    <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
+                        <div>
+                          <h4 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: '600' }}>
+                            <i className="fas fa-id-card" style={{ marginRight: '8px', color: '#4CAF50' }}></i>
+                            Vehicle License
+                          </h4>
+                          <p style={{ color: '#717171', fontSize: '14px', margin: '4px 0' }}>
+                            {licenseDoc.file_name || 'Document'}
+                            {licenseDoc.uploaded_at && ` • Uploaded ${new Date(licenseDoc.uploaded_at).toLocaleDateString()}`}
+                          </p>
+                        </div>
+                        <span className={`status-badge ${licenseDoc.is_verified ? 'verified' : 'pending'}`}>
+                          {licenseDoc.is_verified ? 'Approved' : 'Pending Review'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <button 
+                          className="action-btn view"
+                          onClick={() => {
+                            if (licenseDoc.doc_url) {
+                              window.open(licenseDoc.doc_url, '_blank');
+                            } else {
+                              toast.error('Document URL not available');
+                            }
+                          }}
+                        >
+                          <i className="fas fa-eye"></i> View
+                        </button>
+                        {!licenseDoc.is_verified && (
+                          <>
+                            <button 
+                              className="action-btn"
+                              style={{ backgroundColor: '#4CAF50', color: 'white' }}
+                              onClick={() => handleVerifyCarDocument(licenseDoc.id, true)}
+                            >
+                              <i className="fas fa-check"></i> Approve
+                            </button>
+                            <button 
+                              className="action-btn delete"
+                              onClick={() => handleVerifyCarDocument(licenseDoc.id, false)}
+                            >
+                              <i className="fas fa-times"></i> Disapprove
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '16px', textAlign: 'center', color: '#717171' }}>
+                      <i className="fas fa-id-card" style={{ fontSize: '24px', marginBottom: '8px', display: 'block' }}></i>
+                      <p>No license document uploaded</p>
+                    </div>
+                  )}
+
+                  {/* Insurance Document */}
+                  {insuranceDoc ? (
+                    <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
+                        <div>
+                          <h4 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: '600' }}>
+                            <i className="fas fa-shield-alt" style={{ marginRight: '8px', color: '#2196F3' }}></i>
+                            Insurance
+                          </h4>
+                          <p style={{ color: '#717171', fontSize: '14px', margin: '4px 0' }}>
+                            {insuranceDoc.file_name || 'Document'}
+                            {insuranceDoc.uploaded_at && ` • Uploaded ${new Date(insuranceDoc.uploaded_at).toLocaleDateString()}`}
+                          </p>
+                        </div>
+                        <span className={`status-badge ${insuranceDoc.is_verified ? 'verified' : 'pending'}`}>
+                          {insuranceDoc.is_verified ? 'Approved' : 'Pending Review'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <button 
+                          className="action-btn view"
+                          onClick={() => {
+                            if (insuranceDoc.doc_url) {
+                              window.open(insuranceDoc.doc_url, '_blank');
+                            } else {
+                              toast.error('Document URL not available');
+                            }
+                          }}
+                        >
+                          <i className="fas fa-eye"></i> View
+                        </button>
+                        {!insuranceDoc.is_verified && (
+                          <>
+                            <button 
+                              className="action-btn"
+                              style={{ backgroundColor: '#4CAF50', color: 'white' }}
+                              onClick={() => handleVerifyCarDocument(insuranceDoc.id, true)}
+                            >
+                              <i className="fas fa-check"></i> Approve
+                            </button>
+                            <button 
+                              className="action-btn delete"
+                              onClick={() => handleVerifyCarDocument(insuranceDoc.id, false)}
+                            >
+                              <i className="fas fa-times"></i> Disapprove
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '16px', textAlign: 'center', color: '#717171' }}>
+                      <i className="fas fa-shield-alt" style={{ fontSize: '24px', marginBottom: '8px', display: 'block' }}></i>
+                      <p>No insurance document uploaded</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1814,12 +2084,6 @@ function Admin() {
             >
               📅 Bookings
             </button>
-            <button 
-              className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
-              onClick={() => setActiveTab('settings')}
-            >
-              ⚙️ Settings
-            </button>
           </nav>
           
           <div className="admin-footer">
@@ -1834,11 +2098,11 @@ function Admin() {
           {activeTab === 'users' && renderUsers()}
           {activeTab === 'cars' && renderCars()}
           {activeTab === 'bookings' && renderBookings()}
-          {activeTab === 'settings' && renderSettings()}
         </div>
         
         {renderCreateCarForm()}
         {renderDocumentsModal()}
+        {renderCarModal()}
       </div>
     </div>
   );

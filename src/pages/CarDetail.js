@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import ImageGallery from '../components/ImageGallery';
 import { useToastContext } from '../context/ToastContext';
 import { CarCardSkeleton } from '../components/LoadingSkeleton';
-import { vehiclesAPI, getUserData } from '../utils/api';
+import { vehiclesAPI, getUserData, searchAPI } from '../utils/api';
 import { getAllCarImages } from '../utils/carImages';
 
 function CarDetail() {
   const { id } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const toast = useToastContext();
   const [car, setCar] = useState(null);
@@ -51,32 +52,169 @@ function CarDetail() {
 
     try {
       setLoading(true);
-      console.log('[CarDetail] Fetching car with ID:', id);
-      const carData = await vehiclesAPI.getById(id);
-      console.log('[CarDetail] Raw API response:', carData);
+      const carId = parseInt(id);
+      console.log('[CarDetail] Fetching car with ID:', carId);
       
-      // Handle response - it might be an array or a single object
       let car = null;
-      if (Array.isArray(carData)) {
-        // If response is an array, find the car with matching ID
-        const carId = parseInt(id);
-        car = carData.find(c => c.id === carId);
-        if (!car) {
-          // If not found, use first car as fallback
-          car = carData[0];
-          console.warn(`[CarDetail] Car with ID ${carId} not found in array, using first car with ID ${car.id}`);
-        } else {
-          console.log(`[CarDetail] Found car with ID ${carId} in array`);
-        }
+      
+      // Check if car data was passed via navigation state (from listing pages)
+      const carFromState = location.state?.car;
+      if (carFromState && (parseInt(carFromState.id || carFromState.vehicle_id) === carId)) {
+        console.log('[CarDetail] Using car data from navigation state');
+        car = carFromState;
       } else {
-        // Handle both direct object and nested data property
-        car = carData.vehicle || carData.data || carData;
+        // Primary approach: Use search API to get car details (public access)
+        // Search API doesn't have ownership restrictions, so all users can view active cars
+        // Note: Search API requires city, so we'll extract city from car location or try common cities
+        try {
+          // Use default dates to search for the car
+          const today = new Date();
+          const futureDate = new Date();
+          futureDate.setDate(today.getDate() + 365); // Search up to 1 year ahead to find the car
+          
+          const searchParams = {
+            availability_start_date: today.toISOString().split('T')[0],
+            availability_end_date: futureDate.toISOString().split('T')[0],
+            page: 1,
+            page_size: 1000 // Get enough results to find our car
+          };
+          
+          // Try to get city from location state or try without city first
+          let searchResults = null;
+          let carsArray = [];
+          
+          // First, try without city (in case API allows it)
+          try {
+            console.log('[CarDetail] Searching Elasticsearch for car (without city):', searchParams);
+            searchResults = await searchAPI.searchCars(searchParams);
+            carsArray = searchResults?.results || [];
+          } catch (noCityError) {
+            // If city is required, try to get it from location state or try common cities
+            console.log('[CarDetail] Search requires city, trying to find car city...');
+            
+            // Try to get city from location state if available
+            let cityToUse = location.state?.city || location.state?.car?.location?.city;
+            
+            if (!cityToUse && location.state?.car?.location) {
+              // Extract city from location object
+              const loc = location.state.car.location;
+              cityToUse = loc.city || loc.name;
+            }
+            
+            if (cityToUse) {
+              try {
+                searchParams.city = cityToUse;
+                console.log(`[CarDetail] Searching with city from state: ${cityToUse}`);
+                searchResults = await searchAPI.searchCars(searchParams);
+                carsArray = searchResults?.results || [];
+              } catch (cityError) {
+                console.warn('[CarDetail] Search with state city failed, trying common cities...');
+                cityToUse = null;
+              }
+            }
+            
+            // If still no city, try common cities
+            if (!cityToUse || carsArray.length === 0) {
+              const commonCities = ['Paris', 'London', 'New York', 'Los Angeles', 'Chicago', 'Morez', 'Besançon'];
+              for (const city of commonCities) {
+                try {
+                  searchParams.city = city;
+                  searchResults = await searchAPI.searchCars(searchParams);
+                  carsArray = searchResults?.results || [];
+                  if (carsArray.length > 0) {
+                    console.log(`[CarDetail] Found ${carsArray.length} cars searching in ${city}`);
+                    break;
+                  }
+                } catch (cityError) {
+                  continue;
+                }
+              }
+            }
+          }
+          
+          console.log('[CarDetail] Search returned', carsArray.length, 'cars');
+          
+          // Find the car with matching ID
+          car = carsArray.find(c => {
+            const cId = parseInt(c.id || c.vehicle_id);
+            return cId === carId;
+          });
+          
+          if (car) {
+            console.log(`[CarDetail] Found car with ID ${carId} in Elasticsearch results`);
+          } else {
+            console.warn(`[CarDetail] Car with ID ${carId} not found in Elasticsearch, trying vehiclesAPI as fallback`);
+            // Fallback: Try vehicles API (only works for owners/admins)
+            try {
+              const carData = await vehiclesAPI.getById(id);
+              console.log('[CarDetail] Raw API response from vehiclesAPI:', carData);
+              
+              // Handle response - it might be an array or a single object
+              if (Array.isArray(carData)) {
+                car = carData.find(c => {
+                  const cId = parseInt(c.id || c.vehicle_id);
+                  return cId === carId;
+                });
+              } else {
+                car = carData.vehicle || carData.data || carData;
+              }
+              
+              if (car) {
+                console.log(`[CarDetail] Found car with ID ${carId} via vehiclesAPI`);
+              }
+            } catch (vehiclesError) {
+              console.error('[CarDetail] vehiclesAPI also failed:', vehiclesError);
+              // Will throw error below if car is still null
+            }
+          }
+        } catch (searchError) {
+          console.error('[CarDetail] Search API failed:', searchError);
+          // Try vehicles API as last resort
+          try {
+            const carData = await vehiclesAPI.getById(id);
+            if (Array.isArray(carData)) {
+              car = carData.find(c => {
+                const cId = parseInt(c.id || c.vehicle_id);
+                return cId === carId;
+              });
+            } else {
+              car = carData.vehicle || carData.data || carData;
+            }
+          } catch (vehiclesError) {
+            console.error('[CarDetail] Both search and vehicles API failed');
+            throw searchError; // Re-throw search error
+          }
+        }
+      }
+      
+      // If car is still not found, throw error
+      if (!car) {
+        throw new Error(`Car with ID ${carId} not found. It may not be active or available.`);
       }
       
       console.log('[CarDetail] Extracted car object:', car);
+      console.log('[CarDetail] Requested ID:', id, 'Type:', typeof id);
+      console.log('[CarDetail] Car ID from response:', car?.id || car?.vehicle_id, 'Type:', typeof (car?.id || car?.vehicle_id));
       
-      // Ensure car has required structure
+      // Ensure car has required structure and ID matches
       if (car) {
+        // Ensure car.id is set and matches the requested ID
+        const requestedId = parseInt(id);
+        const carId = parseInt(car.id || car.vehicle_id);
+        
+        if (isNaN(carId) || carId !== requestedId) {
+          console.error(`[CarDetail] ID mismatch! Requested: ${requestedId}, Car ID: ${carId}`);
+          toast.error(`Car ID mismatch. The car you clicked may not be available.`);
+          setCar(null);
+          setLoading(false);
+          navigate('/cars');
+          return;
+        }
+        
+        // Ensure id is set correctly
+        if (!car.id && car.vehicle_id) {
+          car.id = car.vehicle_id;
+        }
         // Map backend vehicle fields to UI expectations
         // Brand in UI = make in backend (ALWAYS copy make to brand)
         car.brand = car.make || car.brand || '';
@@ -218,12 +356,19 @@ function CarDetail() {
         setCar(null);
       }
     } catch (error) {
-      console.error('Error fetching car details:', error);
+      console.error('[CarDetail] Error fetching car details:', error);
       // Show error message
       if (error.message && !error.message.includes('Failed to fetch') && !error.message.includes('NetworkError')) {
-        toast.error(error.message || 'Failed to load car details.');
+        // Check if it's an access denied error
+        if (error.message.includes('access denied') || error.message.includes('not found') || error.status === 404) {
+          toast.error('This car is not available or you do not have permission to view it.');
+        } else {
+          toast.error(error.message || 'Failed to load car details.');
+        }
       } else if (error.status === 0) {
         toast.error('Cannot connect to car service. Please ensure the backend is running.');
+      } else {
+        toast.error('Failed to load car details. Please try again.');
       }
       // Don't set mock data - let the component show error state
       setCar(null);
@@ -363,10 +508,10 @@ function CarDetail() {
                       <span className="rating-number">{car.rating}</span>
                     </div>
                     <span className="divider">·</span>
-                    <Link to={`/cars?location=${encodeURIComponent(car.locationString || '')}`} className="car-location-link">
+                    <span className="car-location-text">
                       <i className="fas fa-map-marker-alt"></i>
                       {car.locationString || 'Location not available'}
-                    </Link>
+                    </span>
                   </div>
                 </div>
               </div>

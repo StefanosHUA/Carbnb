@@ -135,16 +135,42 @@ function Home() {
   }, []);
 
   useEffect(() => {
-    // Fetch featured cars from API
+    // Fetch featured cars from Elasticsearch
     const fetchFeaturedCars = async () => {
       try {
         setLoadingCars(true);
-        // Build filters - show only active cars to all users
-        const filters = { limit: 6, is_active: true };
         
-        const vehicles = await vehiclesAPI.getAll(filters);
-        const carsData = Array.isArray(vehicles) ? vehicles : (vehicles.data || vehicles.vehicles || []);
-        // Normalize images - use all available images from database (could be 1, 3, or more)
+        // Use default dates for availability (today to 30 days from now)
+        const today = new Date();
+        const futureDate = new Date();
+        futureDate.setDate(today.getDate() + 30);
+        
+        const startDate = today.toISOString().split('T')[0];
+        const endDate = futureDate.toISOString().split('T')[0];
+        
+        // Fetch first 10 cars from Elasticsearch
+        const searchParams = {
+          availability_start_date: startDate,
+          availability_end_date: endDate,
+          page: 1,
+          page_size: 10
+        };
+        
+        const searchResults = await searchAPI.searchCars(searchParams);
+        
+        // Extract cars from search results - SearchResponse has 'results' field
+        const carsData = searchResults?.results || searchResults?.cars || searchResults?.items || searchResults?.data || [];
+        
+        console.log('[Home] Elasticsearch results:', searchResults);
+        console.log('[Home] Cars data extracted:', carsData);
+        
+        // If no cars from Elasticsearch, try fallback
+        if (!carsData || carsData.length === 0) {
+          console.log('[Home] No cars from Elasticsearch, trying fallback...');
+          throw new Error('No cars found in Elasticsearch');
+        }
+        
+        // Normalize images and location for each car
         const normalizedCars = carsData.map(car => {
           // Use utility function to get all car images (prioritizes uploaded media)
           const { getAllCarImages } = require('../utils/carImages');
@@ -177,22 +203,74 @@ function Home() {
           
           return {
             ...car,
-            id: car.id, // Ensure id is preserved
+            id: car.id || car.vehicle_id, // Ensure id is preserved
             name: carName,
             price: carPrice,
-            image: images[0], // Primary image for display
-            images: images, // All images array
-            location: locationStr // Normalized location string
+            image: images[0] || car.primary_image_url || car.image, // Primary image for display
+            images: images.length > 0 ? images : (car.primary_image_url ? [car.primary_image_url] : []), // All images array
+            location: locationStr, // Normalized location string
+            make: car.make,
+            model: car.model,
+            is_active: car.is_active !== undefined ? car.is_active : true
           };
         });
         
-        // Additional client-side filtering for active cars (backup)
-        const activeCars = normalizedCars.filter(car => car.is_active === true);
-        
-        setFeaturedCars(activeCars);
+        console.log('[Home] Normalized cars:', normalizedCars);
+        setFeaturedCars(normalizedCars);
       } catch (error) {
-        console.error('Error fetching featured cars:', error);
-        setFeaturedCars([]);
+        console.error('Error fetching featured cars from Elasticsearch:', error);
+        // Fallback: try to get cars from vehicles API if Elasticsearch fails or returns no results
+        try {
+          console.log('[Home] Attempting fallback to vehiclesAPI...');
+          const filters = { limit: 10, is_active: true };
+          const vehicles = await vehiclesAPI.getAll(filters);
+          const carsData = Array.isArray(vehicles) ? vehicles : (vehicles.data || vehicles.vehicles || []);
+          
+          console.log('[Home] Fallback vehicles data:', carsData);
+          
+          const normalizedCars = carsData.map(car => {
+            const { getAllCarImages } = require('../utils/carImages');
+            let images = getAllCarImages(car);
+            
+            let locationStr = car.location;
+            if (car.location && typeof car.location === 'object') {
+              const loc = car.location;
+              if (loc.city && loc.state) {
+                locationStr = `${loc.city}, ${loc.state}`;
+              } else if (loc.city) {
+                locationStr = loc.city;
+              } else if (loc.state) {
+                locationStr = loc.state;
+              } else if (loc.name) {
+                locationStr = loc.name;
+              } else if (loc.address) {
+                locationStr = loc.address;
+              } else {
+                locationStr = 'Location not available';
+              }
+            }
+            
+            const carName = car.name || `${car.make || ''} ${car.model || ''}`.trim() || 'Car';
+            const carPrice = car.price || car.daily_rate || 0;
+            
+            return {
+              ...car,
+              id: car.id,
+              name: carName,
+              price: carPrice,
+              image: images[0],
+              images: images,
+              location: locationStr
+            };
+          });
+          
+          const activeCars = normalizedCars.filter(car => car.is_active === true);
+          console.log('[Home] Fallback active cars:', activeCars);
+          setFeaturedCars(activeCars);
+        } catch (fallbackError) {
+          console.error('[Home] Fallback fetch also failed:', fallbackError);
+          setFeaturedCars([]);
+        }
       } finally {
         setLoadingCars(false);
       }
@@ -248,22 +326,38 @@ function Home() {
       }
       
       // Build search parameters - Simple city-based search
+      // API requires availability dates, so use defaults if not provided
+      let startDate = searchData.startDate;
+      let endDate = searchData.endDate;
+      
+      if (!startDate || !endDate) {
+        // Use default dates (today to 30 days from now) if not provided
+        const today = new Date();
+        const futureDate = new Date();
+        futureDate.setDate(today.getDate() + 30);
+        startDate = startDate || today.toISOString().split('T')[0];
+        endDate = endDate || futureDate.toISOString().split('T')[0];
+      }
+      
       const searchParams = {
         // REQUIRED fields
         city: cityInput,
+        availability_start_date: startDate,
+        availability_end_date: endDate,
         
         // OPTIONAL fields
-        availability_start_date: searchData.startDate || null,
-        availability_end_date: searchData.endDate || null,
         query: queryText || null,
         make: searchData.brand && searchData.brand.trim() !== '' ? searchData.brand : null,
         model: searchData.model && searchData.model.trim() !== '' ? searchData.model : null,
       };
       
-      // Remove null/undefined/empty values
+      // Remove null/undefined/empty values (but keep required fields)
       Object.keys(searchParams).forEach(key => {
         if (searchParams[key] === null || searchParams[key] === undefined || searchParams[key] === '') {
-          delete searchParams[key];
+          // Don't delete required fields
+          if (key !== 'city' && key !== 'availability_start_date' && key !== 'availability_end_date') {
+            delete searchParams[key];
+          }
         }
       });
       

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import CarCard from '../components/CarCard';
-import { vehiclesAPI, authAPI, getUserData } from '../utils/api';
+import { vehiclesAPI, authAPI, getUserData, searchAPI } from '../utils/api';
 import { useToastContext } from '../context/ToastContext';
 import { getAllCarImages } from '../utils/carImages';
 
@@ -98,23 +98,54 @@ function Cars() {
     applyFilters();
   }, [filters, cars]);
 
+  // Refetch cars when page changes
+  useEffect(() => {
+    // Only fetch if we don't have search results from navigation
+    if (!location.state?.fromSearch) {
+      fetchCars();
+    }
+  }, [currentPage]);
+
   const fetchCars = async () => {
     try {
       setLoading(true);
       try {
-        // Check if user is admin - admins can see all cars, normal users only see active cars
-        const userData = getUserData();
-        const isAdmin = userData?.role === 'admin' || userData?.role === 'super_admin';
+        // Use Elasticsearch to get paginated cars
+        // Use default dates for availability (today to 30 days from now)
+        const today = new Date();
+        const futureDate = new Date();
+        futureDate.setDate(today.getDate() + 30);
         
-        // Build filters - normal users only see active cars
-        const filters = {};
-        if (!isAdmin) {
-          filters.is_active = true;
+        const startDate = today.toISOString().split('T')[0];
+        const endDate = futureDate.toISOString().split('T')[0];
+        
+        // Fetch cars from Elasticsearch with pagination
+        const searchParams = {
+          availability_start_date: startDate,
+          availability_end_date: endDate,
+          page: currentPage,
+          page_size: ITEMS_PER_PAGE
+        };
+        
+        const searchResults = await searchAPI.searchCars(searchParams);
+        
+        // Extract cars and pagination info from search results - SearchResponse has 'results' field
+        const carsData = searchResults?.results || searchResults?.cars || searchResults?.items || searchResults?.data || [];
+        const total = searchResults?.total || searchResults?.total_results || carsData.length;
+        
+        console.log('[Cars] Elasticsearch results:', searchResults);
+        console.log('[Cars] Cars data extracted:', carsData);
+        
+        // If no cars from Elasticsearch, try fallback
+        if (!carsData || carsData.length === 0) {
+          console.log('[Cars] No cars from Elasticsearch, trying fallback...');
+          throw new Error('No cars found in Elasticsearch');
         }
         
-        const vehicles = await vehiclesAPI.getAll(filters);
-        // Handle both array response and object with data property
-        const carsData = Array.isArray(vehicles) ? vehicles : (vehicles.data || vehicles.vehicles || []);
+        // Update pagination
+        setTotalResults(total);
+        setTotalPages(Math.ceil(total / ITEMS_PER_PAGE));
+        
         // Normalize images - use all available images from database (could be any number)
         const normalizedCars = carsData.map(car => {
           // Use utility function to get all car images (prioritizes uploaded media)
@@ -147,25 +178,92 @@ function Cars() {
           
           return {
             ...car,
-            id: car.id, // Ensure id is preserved
+            id: car.id || car.vehicle_id, // Ensure id is preserved
             name: carName,
             brand: car.make || car.brand || '', // Normalize brand from make
             price: carPrice,
-            image: images[0], // Primary image for display
-            images: images, // All images array
-            location: locationStr // Normalized location string
+            image: images[0] || car.primary_image_url || car.image, // Primary image for display
+            images: images.length > 0 ? images : (car.primary_image_url ? [car.primary_image_url] : []), // All images array
+            location: locationStr, // Normalized location string
+            make: car.make,
+            model: car.model,
+            is_active: car.is_active !== undefined ? car.is_active : true
           };
         });
         
-        // Additional client-side filtering for active cars (backup)
-        const activeCars = normalizedCars.filter(car => car.is_active === true);
-        
-        setCars(activeCars);
-        setFilteredCars(activeCars);
+        console.log('[Cars] Normalized cars:', normalizedCars);
+        setCars(normalizedCars);
+        setFilteredCars(normalizedCars);
       } catch (apiError) {
-        console.error('[Cars] API Error:', apiError);
-        // Re-throw to be handled below
-        throw apiError;
+        console.error('[Cars] Elasticsearch API Error:', apiError);
+        // Fallback to vehicles API if Elasticsearch fails or returns no results
+        try {
+          console.log('[Cars] Attempting fallback to vehiclesAPI...');
+          const userData = getUserData();
+          const isAdmin = userData?.role === 'admin' || userData?.role === 'super_admin';
+          
+          const filters = {};
+          if (!isAdmin) {
+            filters.is_active = true;
+          }
+          
+          const vehicles = await vehiclesAPI.getAll(filters);
+          const carsData = Array.isArray(vehicles) ? vehicles : (vehicles.data || vehicles.vehicles || []);
+          
+          console.log('[Cars] Fallback vehicles data:', carsData);
+          
+          const normalizedCars = carsData.map(car => {
+            let images = getAllCarImages(car);
+            
+            let locationStr = car.location;
+            if (car.location && typeof car.location === 'object') {
+              const loc = car.location;
+              if (loc.city && loc.state) {
+                locationStr = `${loc.city}, ${loc.state}`;
+              } else if (loc.city) {
+                locationStr = loc.city;
+              } else if (loc.state) {
+                locationStr = loc.state;
+              } else if (loc.name) {
+                locationStr = loc.name;
+              } else if (loc.address) {
+                locationStr = loc.address;
+              } else {
+                locationStr = 'Location not available';
+              }
+            }
+            
+            const carName = car.name || `${car.make || ''} ${car.model || ''}`.trim() || 'Car';
+            const carPrice = car.price || car.daily_rate || 0;
+            
+            return {
+              ...car,
+              id: car.id,
+              name: carName,
+              brand: car.make || car.brand || '',
+              price: carPrice,
+              image: images[0],
+              images: images,
+              location: locationStr
+            };
+          });
+          
+          const activeCars = normalizedCars.filter(car => car.is_active === true);
+          console.log('[Cars] Fallback active cars:', activeCars);
+          
+          // Apply pagination to fallback results
+          const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+          const endIndex = startIndex + ITEMS_PER_PAGE;
+          const paginatedCars = activeCars.slice(startIndex, endIndex);
+          
+          setCars(activeCars);
+          setFilteredCars(paginatedCars);
+          setTotalResults(activeCars.length);
+          setTotalPages(Math.ceil(activeCars.length / ITEMS_PER_PAGE));
+        } catch (fallbackError) {
+          console.error('[Cars] Fallback fetch also failed:', fallbackError);
+          throw apiError; // Re-throw original error
+        }
       }
     } catch (error) {
       console.error('[Cars] Error fetching cars:', error);
@@ -185,6 +283,8 @@ function Cars() {
       // Set empty arrays instead of mock data
       setCars([]);
       setFilteredCars([]);
+      setTotalResults(0);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
@@ -307,9 +407,16 @@ function Cars() {
 
   // Get paginated cars for current page
   const getPaginatedCars = () => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    return filteredCars.slice(startIndex, endIndex);
+    // Since we're using Elasticsearch with server-side pagination,
+    // filteredCars already contains the paginated results for the current page
+    // Only do client-side pagination if we have search results from navigation
+    if (location.state?.fromSearch) {
+      const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+      const endIndex = startIndex + ITEMS_PER_PAGE;
+      return filteredCars.slice(startIndex, endIndex);
+    }
+    // For Elasticsearch results, return as-is (already paginated)
+    return filteredCars;
   };
 
   const deleteCar = async (carId) => {

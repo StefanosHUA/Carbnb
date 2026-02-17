@@ -32,7 +32,6 @@ function SearchResults() {
         city: paramsFromUrl.get('city'),
         availability_start_date: paramsFromUrl.get('availability_start_date'),
         availability_end_date: paramsFromUrl.get('availability_end_date'),
-        query: paramsFromUrl.get('query') || null,
         make: paramsFromUrl.get('make') || null,
         model: paramsFromUrl.get('model') || null,
         fuel_type: paramsFromUrl.get('fuel_type') || null,
@@ -46,10 +45,22 @@ function SearchResults() {
         page_size: paramsFromUrl.get('page_size') ? parseInt(paramsFromUrl.get('page_size')) : 20,
       };
 
-      // Remove null values
+      // If dates are missing but required, use default dates (today to 30 days from now)
+      if (!params.availability_start_date || !params.availability_end_date) {
+        const today = new Date();
+        const futureDate = new Date();
+        futureDate.setDate(today.getDate() + 30);
+        params.availability_start_date = params.availability_start_date || today.toISOString().split('T')[0];
+        params.availability_end_date = params.availability_end_date || futureDate.toISOString().split('T')[0];
+      }
+
+      // Remove null values (but keep required fields)
       Object.keys(params).forEach(key => {
         if (params[key] === null || params[key] === undefined || params[key] === '') {
-          delete params[key];
+          // Don't delete required fields (availability dates)
+          if (key !== 'availability_start_date' && key !== 'availability_end_date') {
+            delete params[key];
+          }
         }
       });
 
@@ -70,13 +81,19 @@ function SearchResults() {
 
       const results = await searchAPI.searchCars(params);
       console.log('[SearchResults] Search results received:', results);
+      console.log('[SearchResults] Results type:', typeof results);
+      console.log('[SearchResults] Results.results:', results?.results);
+      console.log('[SearchResults] Is array:', Array.isArray(results));
 
-      // Handle response structure
-      const resultsArray = results.results || (Array.isArray(results) ? results : []);
-      const total = results.total || resultsArray.length;
-      const page = results.page || params.page || 1;
-      const pageSize = results.page_size || params.page_size || 20;
-      const pages = results.total_pages || Math.ceil(total / pageSize);
+      // Handle response structure - SearchResponse has 'results' field
+      const resultsArray = results?.results || (Array.isArray(results) ? results : []);
+      const total = results?.total || results?.total_results || resultsArray.length;
+      const page = results?.page || params.page || 1;
+      const pageSize = results?.page_size || params.page_size || 20;
+      const pages = results?.total_pages || Math.ceil(total / pageSize);
+
+      console.log('[SearchResults] Extracted results array:', resultsArray);
+      console.log('[SearchResults] Total:', total, 'Page:', page, 'Pages:', pages);
 
       // Normalize search results to match car format
       const normalizedCars = resultsArray.map(car => {
@@ -110,16 +127,20 @@ function SearchResults() {
 
         return {
           ...car,
-          id: car.id, // Ensure id is preserved
+          id: car.id || car.vehicle_id, // Ensure id is preserved (check both id and vehicle_id)
           name: carName,
           brand: car.make || car.brand || '',
           price: carPrice,
-          image: images[0], // Primary image for display
-          images: images, // All images array
+          image: images[0] || car.primary_image_url || car.image, // Primary image for display
+          images: images.length > 0 ? images : (car.primary_image_url ? [car.primary_image_url] : []), // All images array
           location: locationStr, // Normalized location string
+          make: car.make,
+          model: car.model,
+          is_active: car.is_active !== undefined ? car.is_active : true
         };
       });
 
+      console.log('[SearchResults] Normalized cars:', normalizedCars);
       setSearchResults(normalizedCars);
       setTotalResults(total);
       setCurrentPage(page);
@@ -227,9 +248,14 @@ function SearchResults() {
               gap: '24px',
               marginBottom: '40px'
             }}>
-              {searchResults.map((car) => (
-                <CarCard key={car.id} car={car} />
-              ))}
+              {searchResults.map((car) => {
+                // Ensure car has an id before rendering
+                if (!car.id) {
+                  console.warn('[SearchResults] Car missing ID:', car);
+                  return null;
+                }
+                return <CarCard key={car.id} car={car} />;
+              })}
             </div>
 
             {/* Pagination */}
