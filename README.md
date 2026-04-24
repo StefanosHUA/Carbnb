@@ -72,13 +72,9 @@ A modern car rental platform built with React, inspired by Airbnb but specifical
 - **PostgreSQL** - Relational databases (3 separate DBs)
 - **Redis** - Caching and session management
 - **Elasticsearch** - Search functionality
-- **RabbitMQ** - Message queue for async operations
-- **SQLAlchemy** - ORM
-- **Alembic** - Database migrations
 
 ### DevOps
 - **Docker** & **Docker Compose** - Containerization
-- **Nginx** - Production web server
 - **Uvicorn** - ASGI server
 
 ## 🚀 Getting Started
